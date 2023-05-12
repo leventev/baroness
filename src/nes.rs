@@ -1,5 +1,7 @@
 use bitflags::{bitflags, BitFlags};
 
+use crate::emu::Emulator;
+
 const NES_MAGIC: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
 bitflags! {
@@ -35,7 +37,7 @@ pub struct NESFile {
     pub mapper_number: u8,
 }
 
-pub fn parse_nes_file(file: Vec<u8>) -> Result<NESFile, ()> {
+pub fn parse_nes_file(emu: &mut Emulator, file: Vec<u8>) -> Result<NESFile, ()> {
     let magic = &file[..4];
     if magic != NES_MAGIC {
         return Err(());
@@ -63,6 +65,10 @@ pub fn parse_nes_file(file: Vec<u8>) -> Result<NESFile, ()> {
     };
 
     println!("{}", nes.mapper_number);
+
+    let program_rom = &file[16..16 + (nes.prg_rom_size as usize * usize::pow(2, 14))];
+
+    emu.load_program(program_rom, 0x6000);
 
     Ok(nes)
 }

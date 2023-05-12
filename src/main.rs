@@ -2,6 +2,8 @@
 
 use std::fs;
 
+use crate::nes::parse_nes_file;
+
 mod nes;
 mod emu;
 
@@ -10,10 +12,10 @@ fn main() {
 
     let file_buff = fs::read(filepath).expect("Could not read NES file");
 
-    //parse_nes_file(file_buff).unwrap();
-
     let mut emu = emu::Emulator::new();
-    emu.start_emulation(file_buff, 0x1000);
+    parse_nes_file(&mut emu, file_buff).unwrap();
+
+    emu.start_emulation();
 
     println!("Hello, world!");
 }

@@ -221,10 +221,12 @@ impl Emulator {
             match instruction {
                 Some(ins) => {
                     let operand = self.get_operand(ins.addressing_mode);
-                    (ins.callback)(self, operand);
-                    //let ins_str = self.format_instruction(ins, operand);
-                    //println!("{:X}:\t{}", self.regs.pc, ins_str);
+
+                    let ins_str = self.format_instruction(ins, operand);
+                    println!("{:X}:\t{}", self.regs.pc, ins_str);
+
                     self.regs.pc += ins.bytes as u16;
+                    (ins.callback)(self, operand);
                 }
                 None => panic!("invalid opcode {}", opcode),
             }
@@ -246,11 +248,13 @@ impl Emulator {
         self.set_zero_and_negative_flags(self.regs.y);
     }
 
-    pub fn start_emulation(&mut self, file: Vec<u8>, load_offset: usize) {
+    pub fn load_program(&mut self, file: &[u8], load_offset: usize) {
         assert!(load_offset < u16::MAX as usize);
-        self.load_buff_to_mem(&file[..], load_offset);
+        self.load_buff_to_mem(file, load_offset);
         self.regs.pc = load_offset as u16;
+    }
 
+    pub fn start_emulation(&mut self) {
         self.emulate();
     }
 }

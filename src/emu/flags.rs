@@ -1,29 +1,24 @@
-use super::{Emulator, instructions::Operand};
+use super::{Emulator, instructions::Operand, StatusRegister};
 
-pub fn clc(emu: &mut Emulator, op: Operand) -> usize {
-    todo!()
+macro_rules! flags_fn {
+    ($name: ident, $flag: expr, $cond: expr) => {
+        pub fn $name(emu: &mut Emulator, op: Operand) -> usize {
+            match op {
+                Operand::Implied => {
+                    emu.regs.flags.set($flag, $cond);
+                },
+                _ => unreachable!()
+            }
+        
+            0
+        }
+    };
 }
 
-pub fn cld(emu: &mut Emulator, op: Operand) -> usize {
-    todo!()
-}
-
-pub fn cli(emu: &mut Emulator, op: Operand) -> usize {
-    todo!()
-}
-
-pub fn clv(emu: &mut Emulator, op: Operand) -> usize {
-    todo!()
-}
-
-pub fn sec(emu: &mut Emulator, op: Operand) -> usize {
-    todo!()
-}
-
-pub fn sed(emu: &mut Emulator, op: Operand) -> usize {
-    todo!()
-}
-
-pub fn sei(emu: &mut Emulator, op: Operand) -> usize {
-    todo!()
-}
+flags_fn!(clc, StatusRegister::CARRY, false);
+flags_fn!(cld, StatusRegister::DECIMAL, false);
+flags_fn!(cli, StatusRegister::INTERRUPT_DISABLE, false);
+flags_fn!(clv, StatusRegister::OVERFLOW, false);
+flags_fn!(sec, StatusRegister::CARRY, true);
+flags_fn!(sed, StatusRegister::DECIMAL, true);
+flags_fn!(sei, StatusRegister::INTERRUPT_DISABLE, true);

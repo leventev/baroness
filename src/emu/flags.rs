@@ -1,29 +1,29 @@
-use super::{Emulator, AddressingMode};
+use super::{Emulator, instructions::Operand};
 
-pub fn clc(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn clc(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn cld(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn cld(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn cli(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn cli(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn clv(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn clv(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn sec(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn sec(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn sed(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn sed(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn sei(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn sei(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }

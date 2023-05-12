@@ -1,21 +1,21 @@
-use super::{Emulator, AddressingMode};
+use super::{Emulator, AddressingMode, instructions::Operand};
 
-pub fn brk(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn brk(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn jmp(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn jmp(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn jsr(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn jsr(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn rti(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn rti(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn rts(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn rts(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }

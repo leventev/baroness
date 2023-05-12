@@ -1,8 +1,6 @@
 use super::{logic, branch, flags, control, stack, arithmetic, load, trans, misc, Emulator};
 
-/// Returns the number of extra cycles
-pub type InstructionCallback = fn(emu: &mut Emulator, addressing_mode: AddressingMode) -> usize;
-
+#[derive(Clone, Copy)]
 pub enum AddressingMode {
     Accumulator,
     Implied,
@@ -18,6 +16,26 @@ pub enum AddressingMode {
     ZeroPageIndexedXIndirect,
     ZeroPageIndirectIndexedY
 }
+
+#[derive(Clone, Copy)]
+pub enum Operand {
+    Accumulator,
+    Implied,
+    Immediate(u8),
+    Absolute(u16),
+    ZeroPage(u8),
+    Relative(u8),
+    AbsoluteIndirect(u16),
+    AbsoluteIndexedX(u16),
+    AbsoluteIndexedY(u16),
+    ZeroPageIndexedX(u8),
+    ZeroPageIndexedY(u8),
+    ZeroPageIndexedXIndirect(u8),
+    ZeroPageIndirectIndexedY(u8)
+}
+
+/// Returns the number of extra cycles
+pub type InstructionCallback = fn(emu: &mut Emulator, operand: Operand) -> usize;
 
 pub struct Instruction {
     pub name: &'static str,

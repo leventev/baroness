@@ -1,33 +1,33 @@
-use super::{Emulator, AddressingMode};
+use super::{Emulator, AddressingMode, instructions::Operand};
 
-pub fn bcc(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn bcc(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn bcs(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn bcs(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn beq(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn beq(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn bmi(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn bmi(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn bne(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn bne(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn bpl(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn bpl(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn bvc(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn bvc(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn bvs(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn bvs(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }

@@ -1,17 +1,17 @@
-use super::{Emulator, AddressingMode};
+use super::{Emulator, AddressingMode, instructions::Operand};
 
-pub fn pha(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn pha(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn php(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn php(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn pla(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn pla(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }
 
-pub fn plp(emu: &mut Emulator, _: AddressingMode) -> usize {
+pub fn plp(emu: &mut Emulator, op: Operand) -> usize {
     todo!()
 }

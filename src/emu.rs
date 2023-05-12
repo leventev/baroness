@@ -1,4 +1,4 @@
-use self::instructions::{INSTRUCTIONS, Instruction, AddressingMode};
+use self::instructions::{AddressingMode, Instruction, Operand, INSTRUCTIONS};
 
 const MEMORY_SIZE: usize = usize::pow(2, 16);
 
@@ -56,66 +56,52 @@ impl Emulator {
         }
     }
 
-    fn format_instruction(&self, inst: &Instruction) -> String {
-        match inst.addressing_mode {
-            AddressingMode::Accumulator | AddressingMode::Implied => {
-                inst.name.to_string()
-            },
-            AddressingMode::Immediate => {
-                let operand = self.mem[self.regs.pc as usize + 1];
-                format!("{} #${:X}", inst.name, operand)
-            },
-            AddressingMode::Absolute => {
-                let addr = {
-                    let high = self.mem[self.regs.pc as usize + 1];
-                    let low = self.mem[self.regs.pc as usize + 2];
-                    u16::from_le_bytes([high, low])
-                };
-                format!("{} ${:X}", inst.name, addr)
-            },
-            AddressingMode::ZeroPage | AddressingMode::Relative => {
-                let operand = self.mem[self.regs.pc as usize + 1];
-                format!("{} ${:X}", inst.name, operand)
-            },
-            AddressingMode::AbsoluteIndirect => {
-                let addr = {
-                    let high = self.mem[self.regs.pc as usize + 1];
-                    let low = self.mem[self.regs.pc as usize + 2];
-                    u16::from_le_bytes([high, low])
-                };
-                format!("{} (${:X})", inst.name, addr)
-            },
-            AddressingMode::AbsoluteIndexedX => {
-                let addr = {
-                    let high = self.mem[self.regs.pc as usize + 1];
-                    let low = self.mem[self.regs.pc as usize + 2];
-                    u16::from_le_bytes([high, low])
-                };
-                format!("{} ${:X}, X", inst.name, addr)
-            },
-            AddressingMode::AbsoluteIndexedY => {
-                let addr = {
-                    let high = self.mem[self.regs.pc as usize + 1];
-                    let low = self.mem[self.regs.pc as usize + 2];
-                    u16::from_le_bytes([high, low])
-                };
-                format!("{} ${:X}, Y", inst.name, addr)
-            },
-            AddressingMode::ZeroPageIndexedX => {
-                let operand = self.mem[self.regs.pc as usize + 1];
-                format!("{} ${:X}, X", inst.name, operand)
-            },
-            AddressingMode::ZeroPageIndexedY => {
-                let operand = self.mem[self.regs.pc as usize + 1];
-                format!("{} ${:X}, Y", inst.name, operand)
-            },
+    fn get_operand(&self, addresing_mode: AddressingMode) -> Operand {
+        let single_operand = self.mem[self.regs.pc as usize + 1];
+        let address_operand = {
+            let high = self.mem[self.regs.pc as usize + 1];
+            let low = self.mem[self.regs.pc as usize + 2];
+            u16::from_le_bytes([high, low])
+        };
+
+        match addresing_mode {
+            AddressingMode::Accumulator => Operand::Accumulator,
+            AddressingMode::Implied => Operand::Implied,
+            AddressingMode::Immediate => Operand::Immediate(single_operand),
+            AddressingMode::Absolute => Operand::Absolute(address_operand),
+            AddressingMode::ZeroPage => Operand::ZeroPage(single_operand),
+            AddressingMode::Relative => Operand::Relative(single_operand),
+            AddressingMode::AbsoluteIndirect => Operand::AbsoluteIndirect(address_operand),
+            AddressingMode::AbsoluteIndexedX => Operand::AbsoluteIndexedX(address_operand),
+            AddressingMode::AbsoluteIndexedY => Operand::AbsoluteIndexedY(address_operand),
+            AddressingMode::ZeroPageIndexedX => Operand::ZeroPageIndexedX(single_operand),
+            AddressingMode::ZeroPageIndexedY => Operand::ZeroPageIndexedY(single_operand),
             AddressingMode::ZeroPageIndexedXIndirect => {
-                let operand = self.mem[self.regs.pc as usize + 1];
-                format!("{} (${:X}, X)", inst.name, operand)
-            },
+                Operand::ZeroPageIndexedXIndirect(single_operand)
+            }
             AddressingMode::ZeroPageIndirectIndexedY => {
-                let operand = self.mem[self.regs.pc as usize + 1];
-                format!("{} (${:X}), Y", inst.name, operand)
+                Operand::ZeroPageIndirectIndexedY(single_operand)
+            }
+        }
+    }
+
+    fn format_instruction(&self, inst: &Instruction, op: Operand) -> String {
+        match op {
+            Operand::Accumulator | Operand::Implied => inst.name.to_string(),
+            Operand::Immediate(operand)
+            | Operand::ZeroPage(operand)
+            | Operand::Relative(operand) => format!("{} ${:02X}", inst.name, operand),
+            Operand::Absolute(addr) => format!("{} ${:04X}", inst.name, addr),
+            Operand::AbsoluteIndirect(addr) => format!("{} (${:04X})", inst.name, addr),
+            Operand::AbsoluteIndexedX(addr) => format!("{} ${:02X}, X", inst.name, addr),
+            Operand::AbsoluteIndexedY(addr) => format!("{} ${:02X}, Y", inst.name, addr),
+            Operand::ZeroPageIndexedX(operand) => format!("{} ${:02X}, X", inst.name, operand),
+            Operand::ZeroPageIndexedY(operand) => format!("{} ${:02X}, Y", inst.name, operand),
+            Operand::ZeroPageIndexedXIndirect(operand) => {
+                format!("{} (${:02X}, X)", inst.name, operand)
+            }
+            Operand::ZeroPageIndirectIndexedY(operand) => {
+                format!("{} (${:02X}), Y", inst.name, operand)
             }
         }
     }
@@ -147,6 +133,12 @@ impl Emulator {
     fn push_on_stack(&mut self, val: u8) {
         self.regs.sp -= 1;
         self.mem[self.regs.sp as usize] = val;
+    }
+
+    fn get_indirect_address(&mut self, addr: u16) -> u16{
+        let low = self.mem[addr as usize];
+        let high = self.mem[addr as usize + 1];
+        u16::from_le_bytes([low, high])
     }
 
     fn set_zero_and_negative_flags(&mut self, val: u8) {
@@ -228,13 +220,30 @@ impl Emulator {
             let instruction = &INSTRUCTIONS[opcode as usize];
             match instruction {
                 Some(ins) => {
-                    let ins_str = self.format_instruction(ins);
-                    println!("{:X}:\t{}", self.regs.pc, ins_str);
+                    let operand = self.get_operand(ins.addressing_mode);
+                    (ins.callback)(self, operand);
+                    //let ins_str = self.format_instruction(ins, operand);
+                    //println!("{:X}:\t{}", self.regs.pc, ins_str);
                     self.regs.pc += ins.bytes as u16;
-                },
-                None => panic!("invalid opcode {}", opcode)
+                }
+                None => panic!("invalid opcode {}", opcode),
             }
         }
+    }
+
+    fn set_a(&mut self, val: u8) {
+        self.regs.a = val;
+        self.set_zero_and_negative_flags(self.regs.a);
+    }
+
+    fn set_x(&mut self, val: u8) {
+        self.regs.x = val;
+        self.set_zero_and_negative_flags(self.regs.x);
+    }
+
+    fn set_y(&mut self, val: u8) {
+        self.regs.y = val;
+        self.set_zero_and_negative_flags(self.regs.y);
     }
 
     pub fn start_emulation(&mut self, file: Vec<u8>, load_offset: usize) {

@@ -68,7 +68,7 @@ pub fn parse_nes_file(emu: &mut Emulator, file: Vec<u8>) -> Result<NESFile, ()> 
 
     let program_rom = &file[16..16 + (nes.prg_rom_size as usize * usize::pow(2, 14))];
 
-    emu.load_program(program_rom, 0x6000);
+    emu.load_program(program_rom, 0xC000);
 
     Ok(nes)
 }

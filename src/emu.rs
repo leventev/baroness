@@ -15,6 +15,7 @@ mod trans;
 mod instructions;
 
 bitflags::bitflags! {
+    #[derive(Debug)]
     struct StatusRegister: u8 {
         const CARRY = 1 << 0;
         const ZERO = 1 << 1;
@@ -88,13 +89,14 @@ impl Emulator {
     fn format_instruction(&self, inst: &Instruction, op: Operand) -> String {
         match op {
             Operand::Accumulator | Operand::Implied => inst.name.to_string(),
-            Operand::Immediate(operand)
-            | Operand::ZeroPage(operand)
-            | Operand::Relative(operand) => format!("{} ${:02X}", inst.name, operand),
+            Operand::Immediate(operand) => format!("{} #${:02X}", inst.name, operand),
+            Operand::ZeroPage(operand) | Operand::Relative(operand) => {
+                format!("{} ${:02X}", inst.name, operand)
+            }
             Operand::Absolute(addr) => format!("{} ${:04X}", inst.name, addr),
             Operand::AbsoluteIndirect(addr) => format!("{} (${:04X})", inst.name, addr),
-            Operand::AbsoluteIndexedX(addr) => format!("{} ${:02X}, X", inst.name, addr),
-            Operand::AbsoluteIndexedY(addr) => format!("{} ${:02X}, Y", inst.name, addr),
+            Operand::AbsoluteIndexedX(addr) => format!("{} ${:04X}, X", inst.name, addr),
+            Operand::AbsoluteIndexedY(addr) => format!("{} ${:04X}, Y", inst.name, addr),
             Operand::ZeroPageIndexedX(operand) => format!("{} ${:02X}, X", inst.name, operand),
             Operand::ZeroPageIndexedY(operand) => format!("{} ${:02X}, Y", inst.name, operand),
             Operand::ZeroPageIndexedXIndirect(operand) => {
@@ -131,11 +133,17 @@ impl Emulator {
     }
 
     fn push_on_stack(&mut self, val: u8) {
-        self.regs.sp -= 1;
+        self.regs.sp += 1;
         self.mem[self.regs.sp as usize] = val;
     }
 
-    fn get_indirect_address(&mut self, addr: u16) -> u16{
+    fn pop_stack(&mut self) -> u8 {
+        let val = self.mem[self.regs.sp as usize];
+        self.regs.sp -= 1;
+        val
+    }
+
+    fn get_indirect_address(&mut self, addr: u16) -> u16 {
         let low = self.mem[addr as usize];
         let high = self.mem[addr as usize + 1];
         u16::from_le_bytes([low, high])
@@ -223,7 +231,15 @@ impl Emulator {
                     let operand = self.get_operand(ins.addressing_mode);
 
                     let ins_str = self.format_instruction(ins, operand);
-                    println!("{:X}:\t{}", self.regs.pc, ins_str);
+                    println!(
+                        "{:X}:\t{:<12}A: ${:<04X} X: ${:<04X} Y: ${:<04X} P: {:?}",
+                        self.regs.pc,
+                        ins_str,
+                        self.regs.a,
+                        self.regs.x,
+                        self.regs.y,
+                        self.regs.flags
+                    );
 
                     self.regs.pc += ins.bytes as u16;
                     (ins.callback)(self, operand);

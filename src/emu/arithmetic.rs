@@ -216,24 +216,24 @@ pub fn sbc(emu: &mut Emulator, op: Operand) -> usize {
 pub fn dec(emu: &mut Emulator, op: Operand) -> usize {
     match op {
         Operand::Absolute(addr) => {
-            let val = (emu.mem[addr as usize] as i8).overflowing_sub(1).0 as u8;
+            let val = (emu.mem[addr as usize] as i8).wrapping_add(1) as u8;
             emu.set_zero_and_negative_flags(val);
             emu.mem[addr as usize] = val;
         }
         Operand::AbsoluteIndexedX(addr) => {
             let final_addr = addr + emu.regs.x as u16;
-            let val = (emu.mem[final_addr as usize] as i8).overflowing_sub(1).0 as u8;
+            let val = (emu.mem[final_addr as usize] as i8).wrapping_add(1) as u8;
             emu.set_zero_and_negative_flags(val);
             emu.mem[final_addr as usize] = val;
         }
         Operand::ZeroPage(off) => {
-            let val = (emu.mem[off as usize] as i8).overflowing_sub(1).0 as u8;
+            let val = (emu.mem[off as usize] as i8).wrapping_add(1) as u8;
             emu.set_zero_and_negative_flags(val);
             emu.mem[off as usize] = val;
         }
         Operand::ZeroPageIndexedX(off) => {
             let final_addr = off.overflowing_add(emu.regs.x).0;
-            let val = (emu.mem[final_addr as usize] as i8).overflowing_sub(1).0 as u8;
+            let val = (emu.mem[final_addr as usize] as i8).wrapping_add(1) as u8;
             emu.set_zero_and_negative_flags(val);
             emu.mem[final_addr as usize] = val;
         }
@@ -264,24 +264,24 @@ pub fn dey(emu: &mut Emulator, op: Operand) -> usize {
 pub fn inc(emu: &mut Emulator, op: Operand) -> usize {
     match op {
         Operand::Absolute(addr) => {
-            let val = (emu.mem[addr as usize] as i8).overflowing_add(1).0 as u8;
+            let val = (emu.mem[addr as usize] as i8).wrapping_add(1) as u8;
             emu.set_zero_and_negative_flags(val);
             emu.mem[addr as usize] = val;
         }
         Operand::AbsoluteIndexedX(addr) => {
             let final_addr = addr + emu.regs.x as u16;
-            let val = (emu.mem[final_addr as usize] as i8).overflowing_add(1).0 as u8;
+            let val = (emu.mem[final_addr as usize] as i8).wrapping_add(1) as u8;
             emu.set_zero_and_negative_flags(val);
             emu.mem[final_addr as usize] = val;
         }
         Operand::ZeroPage(off) => {
-            let val = (emu.mem[off as usize] as i8).overflowing_add(1).0 as u8;
+            let val = (emu.mem[off as usize] as i8).wrapping_add(1) as u8;
             emu.set_zero_and_negative_flags(val);
             emu.mem[off as usize] = val;
         }
         Operand::ZeroPageIndexedX(off) => {
             let final_addr = off.overflowing_add(emu.regs.x).0;
-            let val = (emu.mem[final_addr as usize] as i8).overflowing_add(1).0 as u8;
+            let val = (emu.mem[final_addr as usize] as i8).wrapping_add(1) as u8;
             emu.set_zero_and_negative_flags(val);
             emu.mem[final_addr as usize] = val;
         }
@@ -293,7 +293,7 @@ pub fn inc(emu: &mut Emulator, op: Operand) -> usize {
 
 pub fn inx(emu: &mut Emulator, op: Operand) -> usize {
     match op {
-        Operand::Implied => emu.set_x(emu.regs.y.overflowing_sub(1).0),
+        Operand::Implied => emu.set_x(emu.regs.x.wrapping_add(1)),
         _ => unreachable!(),
     }
 
@@ -302,7 +302,7 @@ pub fn inx(emu: &mut Emulator, op: Operand) -> usize {
 
 pub fn iny(emu: &mut Emulator, op: Operand) -> usize {
     match op {
-        Operand::Implied => emu.set_y(emu.regs.y + 1),
+        Operand::Implied => emu.set_y(emu.regs.y.wrapping_add(1)),
         _ => unreachable!(),
     }
 

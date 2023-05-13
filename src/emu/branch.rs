@@ -7,7 +7,7 @@ macro_rules! branch_fn {
 
             match op {
                 Operand::Relative(off) => {
-                    let final_addr = emu.regs.pc + off as u16;
+                    let final_addr = emu.regs.pc.wrapping_add_signed(off as i8 as i16);
 
                     if emu.regs.flags.contains($flag) == $cond {
                         extra_cycles += 1;

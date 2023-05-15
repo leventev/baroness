@@ -3,7 +3,7 @@ use super::{instructions::Operand, Emulator};
 pub fn tax(emu: &mut Emulator, op: Operand) -> usize {
     match op {
         Operand::Implied => {
-            emu.set_x(emu.regs.x);
+            emu.set_x(emu.regs.a);
         }
         _ => unreachable!(),
     }
@@ -14,7 +14,7 @@ pub fn tax(emu: &mut Emulator, op: Operand) -> usize {
 pub fn tay(emu: &mut Emulator, op: Operand) -> usize {
     match op {
         Operand::Implied => {
-            emu.set_y(emu.regs.x);
+            emu.set_y(emu.regs.a);
         }
         _ => unreachable!(),
     }
@@ -36,7 +36,7 @@ pub fn tsx(emu: &mut Emulator, op: Operand) -> usize {
 pub fn txa(emu: &mut Emulator, op: Operand) -> usize {
     match op {
         Operand::Implied => {
-            emu.set_a(emu.regs.a);
+            emu.set_a(emu.regs.x);
         }
         _ => unreachable!(),
     }

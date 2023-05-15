@@ -1,6 +1,6 @@
 use super::{logic, branch, flags, control, stack, arithmetic, load, trans, misc, Emulator};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum AddressingMode {
     Accumulator,
     Implied,
@@ -17,7 +17,7 @@ pub enum AddressingMode {
     ZeroPageIndirectIndexedY
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Operand {
     Accumulator,
     Implied,
@@ -469,7 +469,7 @@ pub const INSTRUCTIONS: [Option<Instruction>; 256] = [
     // 0xC9
     Some(Instruction::new("cmp", AddressingMode::Immediate, 2, 2, arithmetic::cmp)),
     // 0xCA
-    Some(Instruction::new("dex", AddressingMode::ZeroPage, 1, 2, arithmetic::dex)),
+    Some(Instruction::new("dex", AddressingMode::Implied, 1, 2, arithmetic::dex)),
     // 0xCB
     None,
     // 0xCC

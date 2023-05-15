@@ -1,4 +1,4 @@
-use super::{instructions::Operand, AddressingMode, Emulator, StatusRegister};
+use super::{instructions::Operand, Emulator, StatusRegister};
 
 pub fn pha(emu: &mut Emulator, op: Operand) -> usize {
     match op {

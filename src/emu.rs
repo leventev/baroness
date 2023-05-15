@@ -12,6 +12,8 @@ mod misc;
 mod stack;
 mod trans;
 
+mod utils;
+
 mod instructions;
 
 bitflags::bitflags! {
@@ -88,10 +90,18 @@ impl Emulator {
 
     fn format_instruction(&self, inst: &Instruction, op: Operand) -> String {
         match op {
-            Operand::Accumulator | Operand::Implied => inst.name.to_string(),
+            Operand::Implied => inst.name.to_string(),
+            Operand::Accumulator => format!("{} a", inst.name),
             Operand::Immediate(operand) => format!("{} #${:02X}", inst.name, operand),
-            Operand::ZeroPage(operand) | Operand::Relative(operand) => {
+            Operand::ZeroPage(operand) => {
                 format!("{} ${:02X}", inst.name, operand)
+            }
+            Operand::Relative(operand) => {
+                format!(
+                    "{} ${:04X}",
+                    inst.name,
+                    self.regs.pc + operand as u16 + inst.bytes as u16
+                )
             }
             Operand::Absolute(addr) => format!("{} ${:04X}", inst.name, addr),
             Operand::AbsoluteIndirect(addr) => format!("{} (${:04X})", inst.name, addr),
@@ -116,31 +126,18 @@ impl Emulator {
         dest.copy_from_slice(buff);
     }
 
-    fn get_byte_at_pc(&self) -> u8 {
-        self.mem[self.regs.pc as usize]
-    }
-
-    fn forward_pc(&mut self) -> u8 {
-        let b = self.get_byte_at_pc();
-        println!(
-            "forward pc {:#x} -> {:#x} byte: {}",
-            self.regs.pc,
-            self.regs.pc + 1,
-            b
-        );
-        self.regs.pc += 1;
-        b
-    }
-
     fn push_on_stack(&mut self, val: u8) {
-        self.regs.sp += 1;
-        self.mem[self.regs.sp as usize] = val;
+        let addr = 0x100 + self.regs.sp as usize;
+
+        self.mem[addr] = val;
+        self.regs.sp -= 1;
     }
 
     fn pop_stack(&mut self) -> u8 {
-        let val = self.mem[self.regs.sp as usize];
-        self.regs.sp -= 1;
-        val
+        self.regs.sp += 1;
+        let addr = 0x100 + self.regs.sp as usize;
+
+        self.mem[addr]
     }
 
     fn get_indirect_address(&mut self, addr: u16) -> u16 {
@@ -157,72 +154,6 @@ impl Emulator {
     }
 
     fn emulate(&mut self) {
-        /*loop {
-            let opcode = self.forward_pc();
-            println!("opcode: {:#x}", opcode);
-
-            match opcode {
-                // ORA $nn,x
-                0x01 => {
-                    let operand = self.forward_pc();
-                    let zero_page_idx = (operand + self.regs.x) as usize;
-
-                    let addr = {
-                        let low = self.mem[zero_page_idx];
-                        let high = self.mem[zero_page_idx + 1];
-                        u16::from_le_bytes([low, high]) as usize
-                    };
-
-                    let val = self.mem[addr];
-                    self.regs.a |= val;
-
-                    self.set_zero_and_negative_flags(self.regs.a);
-                }
-                // PHP
-                0x08 => {
-                    self.push_on_stack(self.regs.flags.bits());
-                }
-                // LDA #$nn
-                0xA9 => {
-                    self.regs.a = self.forward_pc();
-                    self.set_zero_and_negative_flags(self.regs.a);
-                }
-                // LDX #$nn
-                0xA2 => {
-                    self.regs.x = self.forward_pc();
-                    self.set_zero_and_negative_flags(self.regs.x);
-                }
-                // STA $nn
-                0x85 => {
-                    let operand = self.forward_pc();
-                    self.mem[operand as usize] = self.regs.a;
-                }
-                0x86 => {
-                    let operand = self.forward_pc();
-                    self.mem[operand as usize] = self.regs.x;
-                }
-                0x20 => {
-                    let jmp_addr = {
-                        let high = self.forward_pc();
-                        let low = self.forward_pc();
-                        u16::from_le_bytes([high, low])
-                    };
-
-                    let (ret_high, ret_low) = {
-                        let ret = self.regs.pc;
-                        ((ret >> 8) as u8, (ret & 0xFF) as u8)
-                    };
-
-                    self.push_on_stack(ret_low);
-                    self.push_on_stack(ret_high);
-
-                    println!("{}", jmp_addr);
-                    self.regs.pc = jmp_addr;
-                }
-                _ => panic!("unsupported opcode {:#x}", opcode),
-            }
-        }*/
-
         loop {
             let opcode = self.mem[self.regs.pc as usize];
             let instruction = &INSTRUCTIONS[opcode as usize];
@@ -232,12 +163,13 @@ impl Emulator {
 
                     let ins_str = self.format_instruction(ins, operand);
                     println!(
-                        "{:X}:\t{:<12}A: ${:<04X} X: ${:<04X} Y: ${:<04X} P: {:?}",
+                        "{:X}:\t{:<12}A: ${:<02X} X: ${:<02X} Y: ${:<02X} SP: ${:<02X} P: {:?}",
                         self.regs.pc,
                         ins_str,
                         self.regs.a,
                         self.regs.x,
                         self.regs.y,
+                        self.regs.sp,
                         self.regs.flags
                     );
 

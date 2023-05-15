@@ -1,4 +1,4 @@
-use super::{instructions::Operand, AddressingMode, Emulator};
+use super::{instructions::Operand, Emulator};
 
 pub fn lda(emu: &mut Emulator, op: Operand) -> usize {
     let mut extra_cycles = 0;

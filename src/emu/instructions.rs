@@ -1,4 +1,4 @@
-use super::{logic, branch, flags, control, stack, arithmetic, load, trans, misc, Emulator};
+use super::{arithmetic, branch, control, flags, load, logic, misc, stack, trans, Emulator};
 
 #[derive(Clone, Copy, Debug)]
 pub enum AddressingMode {
@@ -14,7 +14,7 @@ pub enum AddressingMode {
     ZeroPageIndexedX,
     ZeroPageIndexedY,
     ZeroPageIndexedXIndirect,
-    ZeroPageIndirectIndexedY
+    ZeroPageIndirectIndexedY,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -31,7 +31,7 @@ pub enum Operand {
     ZeroPageIndexedX(u8),
     ZeroPageIndexedY(u8),
     ZeroPageIndexedXIndirect(u8),
-    ZeroPageIndirectIndexedY(u8)
+    ZeroPageIndirectIndexedY(u8),
 }
 
 /// Returns the number of extra cycles
@@ -43,6 +43,7 @@ pub struct Instruction {
     pub bytes: usize,
     pub cycles: usize,
     pub callback: InstructionCallback,
+    pub unofficial: bool,
 }
 
 impl Instruction {
@@ -52,6 +53,7 @@ impl Instruction {
         bytes: usize,
         cycles: usize,
         callback: InstructionCallback,
+        unofficial: bool,
     ) -> Instruction {
         Instruction {
             name,
@@ -59,521 +61,848 @@ impl Instruction {
             bytes,
             cycles,
             callback,
+            unofficial,
         }
     }
 }
 
+macro_rules! inst {
+    ($name: expr, $addressing_mode: expr, $bytes: expr, $cycles: expr, $callback: expr) => {
+        Some(Instruction::new(
+            $name,
+            $addressing_mode,
+            $bytes,
+            $cycles,
+            $callback,
+            false,
+        ))
+    };
+}
+
+macro_rules! unofficial_inst {
+    ($name: expr, $addressing_mode: expr, $bytes: expr, $cycles: expr, $callback: expr) => {
+        Some(Instruction::new(
+            $name,
+            $addressing_mode,
+            $bytes,
+            $cycles,
+            $callback,
+            true,
+        ))
+    };
+}
+
 pub const INSTRUCTIONS: [Option<Instruction>; 256] = [
     // 0x00
-    Some(Instruction::new("brk", AddressingMode::Implied, 1, 7, control::brk)),
+    inst!("brk", AddressingMode::Implied, 1, 7, control::brk),
     // 0x01
-    Some(Instruction::new("ora", AddressingMode::ZeroPageIndexedXIndirect, 2, 6, logic::ora)),
+    inst!(
+        "ora",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        6,
+        logic::ora
+    ),
     // 0x02
     None,
     // 0x03
-    None,
+    unofficial_inst!(
+        "slo",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        8,
+        logic::slo
+    ),
     // 0x04
-    None,
+    unofficial_inst!("nop", AddressingMode::ZeroPage, 2, 3, misc::nop),
     // 0x05
-    Some(Instruction::new("ora", AddressingMode::ZeroPage, 2, 3, logic::ora)),
+    inst!("ora", AddressingMode::ZeroPage, 2, 3, logic::ora),
     // 0x06
-    Some(Instruction::new("asl", AddressingMode::ZeroPage, 2, 5, logic::asl)),
+    inst!("asl", AddressingMode::ZeroPage, 2, 5, logic::asl),
     // 0x07
-    None,
+    unofficial_inst!("slo", AddressingMode::ZeroPage, 2, 5, logic::slo),
     // 0x08
-    Some(Instruction::new("php", AddressingMode::Implied, 1, 3, stack::php)),
+    inst!("php", AddressingMode::Implied, 1, 3, stack::php),
     // 0x09
-    Some(Instruction::new("ora", AddressingMode::Immediate, 2, 2, logic::ora)),
+    inst!("ora", AddressingMode::Immediate, 2, 2, logic::ora),
     // 0x0A
-    Some(Instruction::new("asl", AddressingMode::Accumulator, 1, 2, logic::asl)),
+    inst!("asl", AddressingMode::Accumulator, 1, 2, logic::asl),
     // 0x0B
     None,
     // 0x0C
-    None,
+    unofficial_inst!("nop", AddressingMode::Absolute, 3, 4, misc::nop),
     // 0x0D
-    Some(Instruction::new("ora", AddressingMode::Absolute, 2, 4, logic::ora)),
+    inst!("ora", AddressingMode::Absolute, 3, 4, logic::ora),
     // 0x0E
-    Some(Instruction::new("asl", AddressingMode::Absolute, 3, 6, logic::asl)),
+    inst!("asl", AddressingMode::Absolute, 3, 6, logic::asl),
     // 0x0F
-    None,
+    unofficial_inst!("slo", AddressingMode::Absolute, 3, 6, logic::slo),
     // 0x10
-    Some(Instruction::new("bpl", AddressingMode::Relative, 2, 2, branch::bpl)),
+    inst!("bpl", AddressingMode::Relative, 2, 2, branch::bpl),
     // 0x11
-    Some(Instruction::new("ora", AddressingMode::ZeroPageIndirectIndexedY, 2, 5, logic::ora)),
+    inst!(
+        "ora",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        5,
+        logic::ora
+    ),
     // 0x12
     None,
     // 0x13
-    None,
+    unofficial_inst!(
+        "slo",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        8,
+        logic::slo
+    ),
     // 0x14
-    None,
+    unofficial_inst!("nop", AddressingMode::ZeroPageIndexedX, 2, 4, misc::nop),
     // 0x15
-    Some(Instruction::new("ora", AddressingMode::ZeroPageIndexedX, 2, 4, logic::ora)),
+    inst!("ora", AddressingMode::ZeroPageIndexedX, 2, 4, logic::ora),
     // 0x16
-    Some(Instruction::new("asl", AddressingMode::ZeroPageIndexedX, 2, 6, logic::asl)),
+    inst!("asl", AddressingMode::ZeroPageIndexedX, 2, 6, logic::asl),
     // 0x17
-    None,
+    unofficial_inst!("slo", AddressingMode::ZeroPageIndexedX, 2, 6, logic::slo),
     // 0x18
-    Some(Instruction::new("clc", AddressingMode::Implied, 1, 2, flags::clc)),
+    inst!("clc", AddressingMode::Implied, 1, 2, flags::clc),
     // 0x19
-    Some(Instruction::new("ora", AddressingMode::AbsoluteIndexedY, 3, 4, logic::ora)),
+    inst!("ora", AddressingMode::AbsoluteIndexedY, 3, 4, logic::ora),
     // 0x1A
-    None,
+    unofficial_inst!("nop", AddressingMode::Implied, 1, 2, misc::nop),
     // 0x1B
-    None,
+    unofficial_inst!("slo", AddressingMode::AbsoluteIndexedY, 3, 7, logic::slo),
     // 0x1C
-    None,
+    unofficial_inst!("nop", AddressingMode::AbsoluteIndexedX, 3, 4, misc::nop),
     // 0x1D
-    Some(Instruction::new("ora", AddressingMode::AbsoluteIndexedX, 3, 4, logic::ora)),
+    inst!("ora", AddressingMode::AbsoluteIndexedX, 3, 4, logic::ora),
     // 0x1E
-    Some(Instruction::new("asl", AddressingMode::AbsoluteIndexedX, 3, 7, logic::asl)),
+    inst!("asl", AddressingMode::AbsoluteIndexedX, 3, 7, logic::asl),
     // 0x1F,
-    None,
+    unofficial_inst!("slo", AddressingMode::AbsoluteIndexedX, 3, 7, logic::slo),
     // 0x20
-    Some(Instruction::new("jsr", AddressingMode::Absolute, 3,6, control::jsr)),
+    inst!("jsr", AddressingMode::Absolute, 3, 6, control::jsr),
     // 0x21
-    Some(Instruction::new("and", AddressingMode::ZeroPageIndexedXIndirect, 2,6, logic::and)),
+    inst!(
+        "and",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        6,
+        logic::and
+    ),
     // 0x22
     None,
     // 0x23
-    None,
+    unofficial_inst!(
+        "rla",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        8,
+        logic::rla
+    ),
     // 0x24
-    Some(Instruction::new("bit", AddressingMode::ZeroPage, 2, 3, logic::bit)),
+    inst!("bit", AddressingMode::ZeroPage, 2, 3, logic::bit),
     // 0x25
-    Some(Instruction::new("and", AddressingMode::ZeroPage, 2, 3, logic::and)),
+    inst!("and", AddressingMode::ZeroPage, 2, 3, logic::and),
     // 0x26
-    Some(Instruction::new("rol", AddressingMode::ZeroPage, 2, 5, logic::rol)),
+    inst!("rol", AddressingMode::ZeroPage, 2, 5, logic::rol),
     // 0x27
-    None,
+    unofficial_inst!("rla", AddressingMode::ZeroPage, 2, 5, logic::rla),
     // 0x28
-    Some(Instruction::new("plp", AddressingMode::Implied, 1, 4, stack::plp)),
+    inst!("plp", AddressingMode::Implied, 1, 4, stack::plp),
     // 0x29
-    Some(Instruction::new("and", AddressingMode::Immediate, 2, 2, logic::and)),
+    inst!("and", AddressingMode::Immediate, 2, 2, logic::and),
     // 0x2A
-    Some(Instruction::new("rol", AddressingMode::Accumulator, 1, 2, logic::rol)),
+    inst!("rol", AddressingMode::Accumulator, 1, 2, logic::rol),
     // 0x2B
     None,
     // 0x2C
-    Some(Instruction::new("bit", AddressingMode::Absolute, 3, 4, logic::bit)),
+    inst!("bit", AddressingMode::Absolute, 3, 4, logic::bit),
     // 0x2D
-    Some(Instruction::new("and", AddressingMode::Absolute, 3, 4, logic::and)),
+    inst!("and", AddressingMode::Absolute, 3, 4, logic::and),
     // 0x2E
-    Some(Instruction::new("rol", AddressingMode::Absolute, 3, 6, logic::rol)),
+    inst!("rol", AddressingMode::Absolute, 3, 6, logic::rol),
     // 0x2F
-    None,
+    unofficial_inst!("rla", AddressingMode::Absolute, 3, 6, logic::rla),
     // 0x30
-    Some(Instruction::new("bmi", AddressingMode::Relative, 2, 2, branch::bmi)),
+    inst!("bmi", AddressingMode::Relative, 2, 2, branch::bmi),
     // 0x31
-    Some(Instruction::new("and", AddressingMode::ZeroPageIndirectIndexedY, 2, 5, logic::and)),
+    inst!(
+        "and",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        5,
+        logic::and
+    ),
     // 0x32
-    None, 
+    None,
     // 0x33,
-    None,
+    unofficial_inst!(
+        "rla",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        8,
+        logic::rla
+    ),
     // 0x34
-    None,
+    unofficial_inst!("nop", AddressingMode::ZeroPageIndexedX, 2, 4, misc::nop),
     // 0x35
-    Some(Instruction::new("and", AddressingMode::ZeroPageIndexedX, 2, 4, logic::and)),
+    inst!("and", AddressingMode::ZeroPageIndexedX, 2, 4, logic::and),
     // 0x36
-    Some(Instruction::new("rol", AddressingMode::ZeroPageIndexedX, 2, 6, logic::rol)),
+    inst!("rol", AddressingMode::ZeroPageIndexedX, 2, 6, logic::rol),
     // 0x37
-    None,
+    unofficial_inst!("rla", AddressingMode::ZeroPageIndexedX, 2, 6, logic::rla),
     // 0x38
-    Some(Instruction::new("sec", AddressingMode::Implied, 1, 2, flags::sec)),
+    inst!("sec", AddressingMode::Implied, 1, 2, flags::sec),
     // 0x39
-    Some(Instruction::new("and", AddressingMode::AbsoluteIndexedY, 3, 4, logic::and)),
+    inst!("and", AddressingMode::AbsoluteIndexedY, 3, 4, logic::and),
     // 0x3A
-    None,
+    unofficial_inst!("nop", AddressingMode::Implied, 1, 2, misc::nop),
     // 0x3B
-    None,
+    unofficial_inst!("rla", AddressingMode::AbsoluteIndexedY, 3, 7, logic::rla),
     // 0x3C
-    None,
+    unofficial_inst!("nop", AddressingMode::AbsoluteIndexedX, 3, 4, misc::nop),
     // 0x3D
-    Some(Instruction::new("and", AddressingMode::AbsoluteIndexedX, 3, 4, logic::and)),
+    inst!("and", AddressingMode::AbsoluteIndexedX, 3, 4, logic::and),
     // 0x3E
-    Some(Instruction::new("rol", AddressingMode::AbsoluteIndexedX, 3, 7, logic::rol)),
+    inst!("rol", AddressingMode::AbsoluteIndexedX, 3, 7, logic::rol),
     // 0x3F
-    None,
+    unofficial_inst!("rla", AddressingMode::AbsoluteIndexedX, 3, 7, logic::rla),
     // 0x40
-    Some(Instruction::new("rti", AddressingMode::Implied, 1, 6, control::rti)),
+    inst!("rti", AddressingMode::Implied, 1, 6, control::rti),
     // 0x41
-    Some(Instruction::new("eor", AddressingMode::ZeroPageIndexedXIndirect, 2, 6, logic::eor)),
+    inst!(
+        "eor",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        6,
+        logic::eor
+    ),
     // 0x42
     None,
     // 0x43
-    None,
+    unofficial_inst!(
+        "sre",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        8,
+        logic::sre
+    ),
     // 0x44
-    None,
+    unofficial_inst!("nop", AddressingMode::ZeroPage, 2, 3, misc::nop),
     // 0x45
-    Some(Instruction::new("eor", AddressingMode::ZeroPage, 2, 3, logic::eor)),
+    inst!("eor", AddressingMode::ZeroPage, 2, 3, logic::eor),
     // 0x46
-    Some(Instruction::new("lsr", AddressingMode::ZeroPage, 2, 5, logic::lsr)),
+    inst!("lsr", AddressingMode::ZeroPage, 2, 5, logic::lsr),
     // 0x47
-    None,
+    unofficial_inst!("sre", AddressingMode::ZeroPage, 2, 5, logic::sre),
     // 0x48
-    Some(Instruction::new("pha", AddressingMode::Implied, 1, 3, stack::pha)),
+    inst!("pha", AddressingMode::Implied, 1, 3, stack::pha),
     // 0x49
-    Some(Instruction::new("eor", AddressingMode::Immediate, 2, 2, logic::eor)),
+    inst!("eor", AddressingMode::Immediate, 2, 2, logic::eor),
     // 0x4A
-    Some(Instruction::new("lsr", AddressingMode::Accumulator, 1, 2, logic::lsr)),
+    inst!("lsr", AddressingMode::Accumulator, 1, 2, logic::lsr),
     // 0x4B
     None,
     // 0x4C
-    Some(Instruction::new("jmp", AddressingMode::Absolute, 3, 3, control::jmp)),
+    inst!("jmp", AddressingMode::Absolute, 3, 3, control::jmp),
     // 0x4D
-    Some(Instruction::new("eor", AddressingMode::Absolute, 3, 4, logic::eor)),
+    inst!("eor", AddressingMode::Absolute, 3, 4, logic::eor),
     // 0x4E
-    Some(Instruction::new("lsr", AddressingMode::Absolute, 3, 6, logic::lsr)),
+    inst!("lsr", AddressingMode::Absolute, 3, 6, logic::lsr),
     // 0x4F
-    None,
+    unofficial_inst!("sre", AddressingMode::Absolute, 3, 6, logic::sre),
     // 0x50
-    Some(Instruction::new("bvc", AddressingMode::Relative, 2, 2, branch::bvc)),
+    inst!("bvc", AddressingMode::Relative, 2, 2, branch::bvc),
     // 0x51
-    Some(Instruction::new("eor", AddressingMode::ZeroPageIndirectIndexedY, 2, 5, logic::eor)),
+    inst!(
+        "eor",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        5,
+        logic::eor
+    ),
     // 0x52
     None,
     // 0x53
-    None,
+    unofficial_inst!(
+        "sre",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        8,
+        logic::sre
+    ),
     // 0x54
-    None,
+    unofficial_inst!("nop", AddressingMode::ZeroPageIndexedX, 2, 4, misc::nop),
     // 0x55
-    Some(Instruction::new("eor", AddressingMode::ZeroPageIndexedX, 2, 4, logic::eor)),
+    inst!("eor", AddressingMode::ZeroPageIndexedX, 2, 4, logic::eor),
     // 0x56
-    Some(Instruction::new("lsr", AddressingMode::Absolute, 3, 6, logic::lsr)),
+    inst!("lsr", AddressingMode::ZeroPageIndexedX, 2, 6, logic::lsr),
     // 0x57
-    None,
+    unofficial_inst!("sre", AddressingMode::ZeroPageIndexedX, 2, 6, logic::sre),
     // 0x58
-    Some(Instruction::new("cli", AddressingMode::Implied, 1, 2, flags::cli)),
+    inst!("cli", AddressingMode::Implied, 1, 2, flags::cli),
     // 0x59
-    Some(Instruction::new("eor", AddressingMode::AbsoluteIndexedY, 3, 4, logic::eor)),
+    inst!("eor", AddressingMode::AbsoluteIndexedY, 3, 4, logic::eor),
     // 0x5A
-    None,
+    unofficial_inst!("nop", AddressingMode::Implied, 1, 2, misc::nop),
     // 0x5B
-    None,
+    unofficial_inst!("sre", AddressingMode::AbsoluteIndexedY, 3, 7, logic::sre),
     // 0x5C
-    None,
+    unofficial_inst!("nop", AddressingMode::AbsoluteIndexedX, 3, 4, misc::nop),
     // 0x5D
-    Some(Instruction::new("eor", AddressingMode::AbsoluteIndexedX, 3, 4, logic::eor)),
+    inst!("eor", AddressingMode::AbsoluteIndexedX, 3, 4, logic::eor),
     // 0x5E
-    Some(Instruction::new("lsr", AddressingMode::AbsoluteIndexedX, 3, 7, logic::lsr)),
+    inst!("lsr", AddressingMode::AbsoluteIndexedX, 3, 7, logic::lsr),
     // 0x5F
-    None,
+    unofficial_inst!("sre", AddressingMode::AbsoluteIndexedX, 3, 7, logic::sre),
     // 0x60
-    Some(Instruction::new("rts", AddressingMode::Implied, 1, 6, control::rts)),
+    inst!("rts", AddressingMode::Implied, 1, 6, control::rts),
     // 0x61
-    Some(Instruction::new("adc", AddressingMode::ZeroPageIndexedXIndirect, 2, 6, arithmetic::adc)),
+    inst!(
+        "adc",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        6,
+        arithmetic::adc
+    ),
     // 0x62
     None,
     // 0x63
-    None,
+    unofficial_inst!(
+        "rra",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        8,
+        logic::rra
+    ),
     // 0x64
-    None,
+    unofficial_inst!("nop", AddressingMode::ZeroPage, 2, 3, misc::nop),
     // 0x65
-    Some(Instruction::new("adc", AddressingMode::ZeroPage, 2, 3, arithmetic::adc)),
+    inst!("adc", AddressingMode::ZeroPage, 2, 3, arithmetic::adc),
     // 0x66
-    Some(Instruction::new("ror", AddressingMode::ZeroPage, 2, 5, logic::ror)),
+    inst!("ror", AddressingMode::ZeroPage, 2, 5, logic::ror),
     // 0x67
-    None,
+    unofficial_inst!("rra", AddressingMode::ZeroPage, 2, 5, logic::rra),
     // 0x68
-    Some(Instruction::new("pla", AddressingMode::Implied, 1, 4, stack::pla)),
+    inst!("pla", AddressingMode::Implied, 1, 4, stack::pla),
     // 0x69
-    Some(Instruction::new("adc", AddressingMode::Immediate, 2, 2, arithmetic::adc)),
+    inst!("adc", AddressingMode::Immediate, 2, 2, arithmetic::adc),
     // 0x6A
-    Some(Instruction::new("ror", AddressingMode::Accumulator, 1, 2, logic::ror)),
+    inst!("ror", AddressingMode::Accumulator, 1, 2, logic::ror),
     // 0x6B
     None,
     // 0x6C
-    Some(Instruction::new("jmp", AddressingMode::AbsoluteIndirect, 3, 5, control::jmp)),
+    inst!("jmp", AddressingMode::AbsoluteIndirect, 3, 5, control::jmp),
     // 0x6D
-    Some(Instruction::new("adc", AddressingMode::Absolute, 3, 4, arithmetic::adc)),
+    inst!("adc", AddressingMode::Absolute, 3, 4, arithmetic::adc),
     // 0x6E
-    Some(Instruction::new("ror", AddressingMode::Absolute, 3, 6, logic::ror)),
+    inst!("ror", AddressingMode::Absolute, 3, 6, logic::ror),
     // 0x6F
-    None,
+    unofficial_inst!("rra", AddressingMode::Absolute, 3, 6, logic::rra),
     // 0x70
-    Some(Instruction::new("bvs", AddressingMode::Relative, 2, 2, branch::bvs)),
+    inst!("bvs", AddressingMode::Relative, 2, 2, branch::bvs),
     // 0x71
-    Some(Instruction::new("adc", AddressingMode::ZeroPageIndirectIndexedY, 2, 5, arithmetic::adc)),
+    inst!(
+        "adc",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        5,
+        arithmetic::adc
+    ),
     // 0x72
     None,
     // 0x73
-    None,
+    unofficial_inst!(
+        "rra",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        8,
+        logic::rra
+    ),
     // 0x74
-    None,
+    unofficial_inst!("nop", AddressingMode::ZeroPageIndexedX, 2, 4, misc::nop),
     // 0x75
-    Some(Instruction::new("adc", AddressingMode::ZeroPageIndexedX, 2, 4, arithmetic::adc)),
+    inst!(
+        "adc",
+        AddressingMode::ZeroPageIndexedX,
+        2,
+        4,
+        arithmetic::adc
+    ),
     // 0x76
-    Some(Instruction::new("ror", AddressingMode::ZeroPageIndexedX, 2, 6, logic::ror)),
+    inst!("ror", AddressingMode::ZeroPageIndexedX, 2, 6, logic::ror),
     // 0x77
-    None,
+    unofficial_inst!("rra", AddressingMode::ZeroPageIndexedX, 2, 6, logic::rra),
     // 0x78
-    Some(Instruction::new("sei", AddressingMode::Implied, 1, 2, flags::sei)),
+    inst!("sei", AddressingMode::Implied, 1, 2, flags::sei),
     // 0x79
-    Some(Instruction::new("adc", AddressingMode::AbsoluteIndexedY, 3, 4, arithmetic::adc)),
+    inst!(
+        "adc",
+        AddressingMode::AbsoluteIndexedY,
+        3,
+        4,
+        arithmetic::adc
+    ),
     // 0x7A
-    None,
+    unofficial_inst!("nop", AddressingMode::Implied, 1, 2, misc::nop),
     // 0x7B
-    None,
+    unofficial_inst!("rra", AddressingMode::AbsoluteIndexedY, 3, 7, logic::rra),
     // 0x7C
-    None,
+    unofficial_inst!("nop", AddressingMode::AbsoluteIndexedX, 3, 4, misc::nop),
     // 0x7D
-    Some(Instruction::new("adc", AddressingMode::AbsoluteIndexedX, 3, 4, arithmetic::adc)),
+    inst!(
+        "adc",
+        AddressingMode::AbsoluteIndexedX,
+        3,
+        4,
+        arithmetic::adc
+    ),
     // 0x7E
-    Some(Instruction::new("ror", AddressingMode::AbsoluteIndexedX, 3, 7, logic::ror)),
+    inst!("ror", AddressingMode::AbsoluteIndexedX, 3, 7, logic::ror),
     // 0x7F
-    None,
+    unofficial_inst!("rra", AddressingMode::AbsoluteIndexedX, 3, 7, logic::rra),
     // 0x80
-    None,
+    unofficial_inst!("nop", AddressingMode::Absolute, 2, 2, misc::nop),
     // 0x81
-    Some(Instruction::new("sta", AddressingMode::ZeroPageIndexedXIndirect, 2, 6, load::sta)),
+    inst!(
+        "sta",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        6,
+        load::sta
+    ),
     // 0x82
-    None,
+    unofficial_inst!("nop", AddressingMode::Absolute, 2, 2, misc::nop),
     // 0x83
-    None,
+    unofficial_inst!(
+        "sax",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        6,
+        load::sax
+    ),
     // 0x84
-    Some(Instruction::new("sty", AddressingMode::ZeroPage, 2, 3, load::sty)),
+    inst!("sty", AddressingMode::ZeroPage, 2, 3, load::sty),
     // 0x85
-    Some(Instruction::new("sta", AddressingMode::ZeroPage, 2, 3, load::sta)),
+    inst!("sta", AddressingMode::ZeroPage, 2, 3, load::sta),
     // 0x86
-    Some(Instruction::new("stx", AddressingMode::ZeroPage, 2, 3, load::stx)),
+    inst!("stx", AddressingMode::ZeroPage, 2, 3, load::stx),
     // 0x87
-    None,
+    unofficial_inst!("sax", AddressingMode::ZeroPage, 2, 3, load::sax),
     // 0x88
-    Some(Instruction::new("dey", AddressingMode::Implied, 1, 2, arithmetic::dey)),
+    inst!("dey", AddressingMode::Implied, 1, 2, arithmetic::dey),
     // 0x89
-    None,
+    unofficial_inst!("nop", AddressingMode::Absolute, 2, 2, misc::nop),
     // 0x8A
-    Some(Instruction::new("txa", AddressingMode::Implied, 1, 2, trans::txa)),
+    inst!("txa", AddressingMode::Implied, 1, 2, trans::txa),
     // 0x8B
     None,
     // 0x8C
-    Some(Instruction::new("sty", AddressingMode::Absolute, 3, 4, load::sty)),
+    inst!("sty", AddressingMode::Absolute, 3, 4, load::sty),
     // 0x8D
-    Some(Instruction::new("sta", AddressingMode::Absolute, 3, 4, load::sta)),
+    inst!("sta", AddressingMode::Absolute, 3, 4, load::sta),
     // 0x8E
-    Some(Instruction::new("stx", AddressingMode::Absolute, 3, 4, load::stx)),
+    inst!("stx", AddressingMode::Absolute, 3, 4, load::stx),
     // 0x8F
-    None,
+    unofficial_inst!("sax", AddressingMode::Absolute, 3, 4, load::sax),
     // 0x90
-    Some(Instruction::new("bcc", AddressingMode::Relative, 2, 2, branch::bcc)),
+    inst!("bcc", AddressingMode::Relative, 2, 2, branch::bcc),
     // 0x91
-    Some(Instruction::new("sta", AddressingMode::ZeroPageIndirectIndexedY, 2, 6, load::sta)),
+    inst!(
+        "sta",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        6,
+        load::sta
+    ),
     // 0x92
     None,
     // 0x93
     None,
     // 0x94
-    Some(Instruction::new("sty", AddressingMode::ZeroPageIndexedX, 2, 4, load::sty)),
+    inst!("sty", AddressingMode::ZeroPageIndexedX, 2, 4, load::sty),
     // 0x95
-    Some(Instruction::new("sta", AddressingMode::ZeroPageIndexedX, 2, 4, load::sta)),
+    inst!("sta", AddressingMode::ZeroPageIndexedX, 2, 4, load::sta),
     // 0x96
-    Some(Instruction::new("stx", AddressingMode::ZeroPageIndexedY, 2, 4, load::stx)),
+    inst!("stx", AddressingMode::ZeroPageIndexedY, 2, 4, load::stx),
     // 0x97
-    None,
+    unofficial_inst!("sax", AddressingMode::ZeroPageIndexedY, 2, 4, load::sax),
     // 0x98
-    Some(Instruction::new("tya", AddressingMode::Implied, 1, 2, trans::tya)),
+    inst!("tya", AddressingMode::Implied, 1, 2, trans::tya),
     // 0x99
-    Some(Instruction::new("sta", AddressingMode::AbsoluteIndexedY, 3, 5, load::sta)),
+    inst!("sta", AddressingMode::AbsoluteIndexedY, 3, 5, load::sta),
     // 0x9A
-    Some(Instruction::new("txs", AddressingMode::Implied, 1, 2, trans::txs)),
+    inst!("txs", AddressingMode::Implied, 1, 2, trans::txs),
     // 0x9B
     None,
     // 0x9C
     None,
     // 0x9D
-    Some(Instruction::new("sta", AddressingMode::AbsoluteIndexedX, 3, 5, load::sta)),
+    inst!("sta", AddressingMode::AbsoluteIndexedX, 3, 5, load::sta),
     // 0x9E
     None,
     // 0x9F
     None,
     // 0xA0
-    Some(Instruction::new("ldy", AddressingMode::Immediate, 2, 2, load::ldy)),
+    inst!("ldy", AddressingMode::Immediate, 2, 2, load::ldy),
     // 0xA1
-    Some(Instruction::new("lda", AddressingMode::ZeroPageIndexedXIndirect, 2, 6, load::lda)),
+    inst!(
+        "lda",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        6,
+        load::lda
+    ),
     // 0xA2
-    Some(Instruction::new("ldx", AddressingMode::Immediate, 2, 2, load::ldx)),
+    inst!("ldx", AddressingMode::Immediate, 2, 2, load::ldx),
     // 0xA3
-    None,
+    unofficial_inst!(
+        "lax",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        6,
+        load::lax
+    ),
     // 0xA4
-    Some(Instruction::new("ldy", AddressingMode::ZeroPage, 2, 3, load::ldy)),
+    inst!("ldy", AddressingMode::ZeroPage, 2, 3, load::ldy),
     // 0xA5
-    Some(Instruction::new("lda", AddressingMode::ZeroPage, 2, 3, load::lda)),
+    inst!("lda", AddressingMode::ZeroPage, 2, 3, load::lda),
     // 0xA6
-    Some(Instruction::new("ldx", AddressingMode::ZeroPage, 2, 3, load::ldx)),
+    inst!("ldx", AddressingMode::ZeroPage, 2, 3, load::ldx),
     // 0xA7
-    None,
+    unofficial_inst!("lax", AddressingMode::ZeroPage, 2, 3, load::lax),
     // 0xA8
-    Some(Instruction::new("tay", AddressingMode::Implied, 1, 2, trans::tay)),
+    inst!("tay", AddressingMode::Implied, 1, 2, trans::tay),
     // 0xA9
-    Some(Instruction::new("lda", AddressingMode::Immediate, 2, 2, load::lda)),
+    inst!("lda", AddressingMode::Immediate, 2, 2, load::lda),
     // 0xAA
-    Some(Instruction::new("tax", AddressingMode::Implied, 1, 2, trans::tax)),
+    inst!("tax", AddressingMode::Implied, 1, 2, trans::tax),
     // 0xAB
-    None,
+    unofficial_inst!("lax", AddressingMode::Immediate, 2, 2, load::lax),
     // 0xAC
-    Some(Instruction::new("ldy", AddressingMode::Absolute, 3, 4, load::ldy)),
+    inst!("ldy", AddressingMode::Absolute, 3, 4, load::ldy),
     // 0xAD
-    Some(Instruction::new("lda", AddressingMode::Absolute, 3, 4, load::lda)),
+    inst!("lda", AddressingMode::Absolute, 3, 4, load::lda),
     // 0xAE
-    Some(Instruction::new("ldx", AddressingMode::Absolute, 3, 4, load::ldx)),
+    inst!("ldx", AddressingMode::Absolute, 3, 4, load::ldx),
     // 0xAF
-    None,
+    unofficial_inst!("lax", AddressingMode::Absolute, 3, 4, load::lax),
     // 0xB0
-    Some(Instruction::new("bcs", AddressingMode::Relative, 2, 2, branch::bcs)),
+    inst!("bcs", AddressingMode::Relative, 2, 2, branch::bcs),
     // 0xB1
-    Some(Instruction::new("lda", AddressingMode::ZeroPageIndirectIndexedY, 2, 5, load::lda)),
+    inst!(
+        "lda",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        5,
+        load::lda
+    ),
     // 0xB2
     None,
     // 0xB3
-    None,
+    unofficial_inst!(
+        "lax",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        5,
+        load::lax
+    ),
     // 0xB4
-    Some(Instruction::new("ldy", AddressingMode::ZeroPageIndexedX, 2, 4, load::ldy)),
+    inst!("ldy", AddressingMode::ZeroPageIndexedX, 2, 4, load::ldy),
     // 0xB5
-    Some(Instruction::new("lda", AddressingMode::ZeroPageIndexedX, 2, 4, load::lda)),
+    inst!("lda", AddressingMode::ZeroPageIndexedX, 2, 4, load::lda),
     // 0xB6
-    Some(Instruction::new("ldx", AddressingMode::ZeroPageIndexedX, 2, 4, load::ldx)),
+    inst!("ldx", AddressingMode::ZeroPageIndexedY, 2, 4, load::ldx),
     // 0xB7
-    None,
+    unofficial_inst!("lax", AddressingMode::ZeroPageIndexedY, 2, 4, load::lax),
     // 0xB8
-    Some(Instruction::new("clv", AddressingMode::Implied, 1, 2, flags::clv)),
+    inst!("clv", AddressingMode::Implied, 1, 2, flags::clv),
     // 0xB9
-    Some(Instruction::new("lda", AddressingMode::AbsoluteIndexedY, 3, 4, load::lda)),
+    inst!("lda", AddressingMode::AbsoluteIndexedY, 3, 4, load::lda),
     // 0xBA
-    Some(Instruction::new("tsx", AddressingMode::Implied, 1, 2, trans::tsx)),
+    inst!("tsx", AddressingMode::Implied, 1, 2, trans::tsx),
     // 0xBB
     None,
     // 0xBC
-    Some(Instruction::new("ldy", AddressingMode::AbsoluteIndexedX, 3, 4, load::ldy)),
+    inst!("ldy", AddressingMode::AbsoluteIndexedX, 3, 4, load::ldy),
     // 0xBD
-    Some(Instruction::new("lda", AddressingMode::AbsoluteIndexedX, 3, 4, load::lda)),
+    inst!("lda", AddressingMode::AbsoluteIndexedX, 3, 4, load::lda),
     // 0xBE
-    Some(Instruction::new("ldx", AddressingMode::AbsoluteIndexedX, 3, 4, load::ldx)),
+    inst!("ldx", AddressingMode::AbsoluteIndexedY, 3, 4, load::ldx),
     // 0xBF
-    None,
+    unofficial_inst!("lax", AddressingMode::AbsoluteIndexedY, 3, 4, load::lax),
     // 0xC0
-    Some(Instruction::new("cpy", AddressingMode::Immediate, 2, 2, arithmetic::cpy)),
+    inst!("cpy", AddressingMode::Immediate, 2, 2, arithmetic::cpy),
     // 0xC1
-    Some(Instruction::new("cmp", AddressingMode::ZeroPageIndexedXIndirect, 2, 6, arithmetic::cmp)),
+    inst!(
+        "cmp",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        6,
+        arithmetic::cmp
+    ),
     // 0xC2
-    None,
+    unofficial_inst!("nop", AddressingMode::Absolute, 2, 2, misc::nop),
     // 0xC3
-    None,
+    unofficial_inst!(
+        "dcp",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        8,
+        arithmetic::dcp
+    ),
     // 0xC4
-    Some(Instruction::new("cpy", AddressingMode::ZeroPage, 2, 3, arithmetic::cpy)),
+    inst!("cpy", AddressingMode::ZeroPage, 2, 3, arithmetic::cpy),
     // 0xC5
-    Some(Instruction::new("cmp", AddressingMode::ZeroPage, 2, 3, arithmetic::cmp)),
+    inst!("cmp", AddressingMode::ZeroPage, 2, 3, arithmetic::cmp),
     // 0xC6
-    Some(Instruction::new("dec", AddressingMode::ZeroPage, 2, 5, arithmetic::dec)),
+    inst!("dec", AddressingMode::ZeroPage, 2, 5, arithmetic::dec),
     // 0xC7
-    None,
+    unofficial_inst!("dcp", AddressingMode::ZeroPage, 2, 5, arithmetic::dcp),
     // 0xC8
-    Some(Instruction::new("iny", AddressingMode::Implied, 1, 2, arithmetic::iny)),
+    inst!("iny", AddressingMode::Implied, 1, 2, arithmetic::iny),
     // 0xC9
-    Some(Instruction::new("cmp", AddressingMode::Immediate, 2, 2, arithmetic::cmp)),
+    inst!("cmp", AddressingMode::Immediate, 2, 2, arithmetic::cmp),
     // 0xCA
-    Some(Instruction::new("dex", AddressingMode::Implied, 1, 2, arithmetic::dex)),
+    inst!("dex", AddressingMode::Implied, 1, 2, arithmetic::dex),
     // 0xCB
     None,
     // 0xCC
-    Some(Instruction::new("cpy", AddressingMode::Absolute, 2, 4, arithmetic::cpy)),
+    inst!("cpy", AddressingMode::Absolute, 3, 4, arithmetic::cpy),
     // 0xCD
-    Some(Instruction::new("cmp", AddressingMode::Absolute, 3, 4, arithmetic::cmp)),
+    inst!("cmp", AddressingMode::Absolute, 3, 4, arithmetic::cmp),
     // 0xCE
-    Some(Instruction::new("dec", AddressingMode::Absolute, 3, 6, arithmetic::dec)),
+    inst!("dec", AddressingMode::Absolute, 3, 6, arithmetic::dec),
     // 0xCF
-    None,
+    unofficial_inst!("dcp", AddressingMode::Absolute, 3, 6, arithmetic::dcp),
     // 0xD0
-    Some(Instruction::new("bne", AddressingMode::Relative, 2, 2, branch::bne)),
+    inst!("bne", AddressingMode::Relative, 2, 2, branch::bne),
     // 0xD1
-    Some(Instruction::new("cmp", AddressingMode::ZeroPageIndirectIndexedY, 2, 5, arithmetic::cmp)),
+    inst!(
+        "cmp",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        5,
+        arithmetic::cmp
+    ),
     // 0xD2
     None,
     // 0xD3
-    None,
+    unofficial_inst!(
+        "dcp",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        8,
+        arithmetic::dcp
+    ),
     // 0xD4
-    None,
+    unofficial_inst!("nop", AddressingMode::ZeroPageIndexedX, 2, 4, misc::nop),
     // 0xD5
-    Some(Instruction::new("cmp", AddressingMode::ZeroPageIndexedX, 2, 4, arithmetic::cmp)),
+    inst!(
+        "cmp",
+        AddressingMode::ZeroPageIndexedX,
+        2,
+        4,
+        arithmetic::cmp
+    ),
     // 0xD6
-    Some(Instruction::new("dec", AddressingMode::ZeroPageIndexedX, 2, 6, arithmetic::dec)),
+    inst!(
+        "dec",
+        AddressingMode::ZeroPageIndexedX,
+        2,
+        6,
+        arithmetic::dec
+    ),
     // 0xD7
-    None,
+    unofficial_inst!(
+        "dcp",
+        AddressingMode::ZeroPageIndexedX,
+        2,
+        6,
+        arithmetic::dcp
+    ),
     // 0xD8
-    Some(Instruction::new("cld", AddressingMode::Implied, 1, 2, flags::cld)),
+    inst!("cld", AddressingMode::Implied, 1, 2, flags::cld),
     // 0xD9
-    Some(Instruction::new("cmp", AddressingMode::AbsoluteIndexedY, 3, 4, arithmetic::cmp)),
+    inst!(
+        "cmp",
+        AddressingMode::AbsoluteIndexedY,
+        3,
+        4,
+        arithmetic::cmp
+    ),
     // 0xDA
-    None,
+    unofficial_inst!("nop", AddressingMode::Implied, 1, 2, misc::nop),
     // 0xDB
-    None,
+    unofficial_inst!(
+        "dcp",
+        AddressingMode::AbsoluteIndexedY,
+        3,
+        7,
+        arithmetic::dcp
+    ),
     // 0xDC
-    None,
+    unofficial_inst!("nop", AddressingMode::AbsoluteIndexedX, 3, 4, misc::nop),
     // 0xDD
-    Some(Instruction::new("cmp", AddressingMode::AbsoluteIndexedX, 3, 4, arithmetic::cmp)),
+    inst!(
+        "cmp",
+        AddressingMode::AbsoluteIndexedX,
+        3,
+        4,
+        arithmetic::cmp
+    ),
     // 0xDE
-    Some(Instruction::new("dec", AddressingMode::AbsoluteIndexedX, 3, 7, arithmetic::dec)),
+    inst!(
+        "dec",
+        AddressingMode::AbsoluteIndexedX,
+        3,
+        7,
+        arithmetic::dec
+    ),
     // 0xDF
-    None,
+    unofficial_inst!(
+        "dcp",
+        AddressingMode::AbsoluteIndexedX,
+        3,
+        7,
+        arithmetic::dcp
+    ),
     // 0xE0
-    Some(Instruction::new("cpx", AddressingMode::Immediate, 2, 2, arithmetic::cpx)),
+    inst!("cpx", AddressingMode::Immediate, 2, 2, arithmetic::cpx),
     // 0xE1
-    Some(Instruction::new("sbc", AddressingMode::ZeroPageIndexedXIndirect, 2, 6, arithmetic::sbc)),
+    inst!(
+        "sbc",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        6,
+        arithmetic::sbc
+    ),
     // 0xE2
-    None,
+    unofficial_inst!("nop", AddressingMode::Absolute, 2, 2, misc::nop),
     // 0xE3
-    None,
+    unofficial_inst!(
+        "isc",
+        AddressingMode::ZeroPageIndexedXIndirect,
+        2,
+        8,
+        arithmetic::isc
+    ),
     // 0xE4
-    Some(Instruction::new("cpx", AddressingMode::ZeroPage, 2, 3, arithmetic::cpx)),
+    inst!("cpx", AddressingMode::ZeroPage, 2, 3, arithmetic::cpx),
     // 0xE5
-    Some(Instruction::new("sbc", AddressingMode::ZeroPage, 2, 3, arithmetic::sbc)),
+    inst!("sbc", AddressingMode::ZeroPage, 2, 3, arithmetic::sbc),
     // 0xE6
-    Some(Instruction::new("inc", AddressingMode::ZeroPage, 2, 5, arithmetic::inc)),
+    inst!("inc", AddressingMode::ZeroPage, 2, 5, arithmetic::inc),
     // 0xE7
-    None,
+    unofficial_inst!("isc", AddressingMode::ZeroPage, 2, 5, arithmetic::isc),
     // 0xE8
-    Some(Instruction::new("inx", AddressingMode::Implied, 1, 2, arithmetic::inx)),
+    inst!("inx", AddressingMode::Implied, 1, 2, arithmetic::inx),
     // 0xE9
-    Some(Instruction::new("sbc", AddressingMode::Immediate, 2, 2, arithmetic::sbc)),
+    inst!("sbc", AddressingMode::Immediate, 2, 2, arithmetic::sbc),
     // 0xEA
-    Some(Instruction::new("nop", AddressingMode::Implied, 1, 2, misc::nop)),
+    inst!("nop", AddressingMode::Implied, 1, 2, misc::nop),
     // 0xEB
-    None,
+    unofficial_inst!("sbc", AddressingMode::Immediate, 2, 2, arithmetic::sbc),
     // 0xEC
-    Some(Instruction::new("cpx", AddressingMode::Absolute, 3, 4, arithmetic::cpx)),
+    inst!("cpx", AddressingMode::Absolute, 3, 4, arithmetic::cpx),
     // 0xED
-    Some(Instruction::new("sbc", AddressingMode::Absolute, 3, 4, arithmetic::sbc)),
+    inst!("sbc", AddressingMode::Absolute, 3, 4, arithmetic::sbc),
     // 0xEE
-    Some(Instruction::new("inc", AddressingMode::Absolute, 3, 6, arithmetic::inc)),
+    inst!("inc", AddressingMode::Absolute, 3, 6, arithmetic::inc),
     // 0xEF
-    None,
+    unofficial_inst!("isc", AddressingMode::Absolute, 3, 6, arithmetic::isc),
     // 0xF0
-    Some(Instruction::new("beq", AddressingMode::Relative, 2, 2, branch::beq)),
+    inst!("beq", AddressingMode::Relative, 2, 2, branch::beq),
     // 0xF1
-    Some(Instruction::new("sbc", AddressingMode::ZeroPageIndirectIndexedY, 2, 5, arithmetic::sbc)),
+    inst!(
+        "sbc",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        5,
+        arithmetic::sbc
+    ),
     // 0xF2
     None,
     // 0xF3
-    None,
+    unofficial_inst!(
+        "isc",
+        AddressingMode::ZeroPageIndirectIndexedY,
+        2,
+        8,
+        arithmetic::isc
+    ),
     // 0xF4
-    None,
+    unofficial_inst!("nop", AddressingMode::ZeroPageIndexedX, 2, 4, misc::nop),
     // 0xF5
-    Some(Instruction::new("sbc", AddressingMode::ZeroPageIndexedX, 2, 4, arithmetic::sbc)),
+    inst!(
+        "sbc",
+        AddressingMode::ZeroPageIndexedX,
+        2,
+        4,
+        arithmetic::sbc
+    ),
     // 0xF6
-    Some(Instruction::new("inc", AddressingMode::ZeroPageIndexedX, 2, 6, arithmetic::inc)),
+    inst!(
+        "inc",
+        AddressingMode::ZeroPageIndexedX,
+        2,
+        6,
+        arithmetic::inc
+    ),
     // 0xF7
-    None,
+    unofficial_inst!(
+        "isc",
+        AddressingMode::ZeroPageIndexedX,
+        2,
+        6,
+        arithmetic::isc
+    ),
     // 0xF8
-    Some(Instruction::new("sed", AddressingMode::Implied, 1, 2, flags::sed)),
+    inst!("sed", AddressingMode::Implied, 1, 2, flags::sed),
     // 0xF9
-    Some(Instruction::new("sbc", AddressingMode::AbsoluteIndexedY, 3, 4, arithmetic::sbc)),
+    inst!(
+        "sbc",
+        AddressingMode::AbsoluteIndexedY,
+        3,
+        4,
+        arithmetic::sbc
+    ),
     // 0xFA
-    None,
+    unofficial_inst!("nop", AddressingMode::Implied, 1, 2, misc::nop),
     // 0xFB
-    None,
+    unofficial_inst!(
+        "isc",
+        AddressingMode::AbsoluteIndexedY,
+        3,
+        7,
+        arithmetic::isc
+    ),
     // 0xFC
-    None,
+    unofficial_inst!("nop", AddressingMode::AbsoluteIndexedX, 3, 4, misc::nop),
     // 0xFD
-    Some(Instruction::new("sbc", AddressingMode::AbsoluteIndexedX, 3, 4, arithmetic::sbc)),
+    inst!(
+        "sbc",
+        AddressingMode::AbsoluteIndexedX,
+        3,
+        4,
+        arithmetic::sbc
+    ),
     // 0xFE
-    Some(Instruction::new("inc", AddressingMode::AbsoluteIndexedX, 3, 7, arithmetic::inc)),
+    inst!(
+        "inc",
+        AddressingMode::AbsoluteIndexedX,
+        3,
+        7,
+        arithmetic::inc
+    ),
     // 0xFF
-    None
+    unofficial_inst!(
+        "isc",
+        AddressingMode::AbsoluteIndexedX,
+        3,
+        7,
+        arithmetic::isc
+    ),
 ];

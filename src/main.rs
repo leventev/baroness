@@ -4,8 +4,8 @@ use std::fs;
 
 use crate::nes::parse_nes_file;
 
-mod nes;
 mod emu;
+mod nes;
 
 fn main() {
     let filepath = std::env::args().nth(1).expect("NES file path not provided");
@@ -16,6 +16,4 @@ fn main() {
     parse_nes_file(&mut emu, file_buff).unwrap();
 
     emu.start_emulation();
-
-    println!("Hello, world!");
 }

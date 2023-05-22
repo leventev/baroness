@@ -1,5 +1,5 @@
-use super::{Emulator, AddressingMode, instructions::Operand};
+use super::{instructions::Operand, Emulator};
 
-pub fn nop(_: &mut Emulator, op: Operand) -> usize {
+pub fn nop(_: &mut Emulator, _: Operand) -> usize {
     0
 }

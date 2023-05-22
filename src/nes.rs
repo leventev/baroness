@@ -1,4 +1,4 @@
-use bitflags::{bitflags, BitFlags};
+use bitflags::bitflags;
 
 use crate::emu::Emulator;
 
@@ -64,7 +64,7 @@ pub fn parse_nes_file(emu: &mut Emulator, file: Vec<u8>) -> Result<NESFile, ()> 
         mapper_number: flags_6.bits() >> 4 | flags_7 & 0b11110000,
     };
 
-    println!("{}", nes.mapper_number);
+    //println!("{}", nes.mapper_number);
 
     let program_rom = &file[16..16 + (nes.prg_rom_size as usize * usize::pow(2, 14))];
 

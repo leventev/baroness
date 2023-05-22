@@ -1,4 +1,4 @@
-use super::{Emulator, instructions::Operand, StatusRegister};
+use super::{instructions::Operand, Emulator, StatusRegister};
 
 macro_rules! branch_fn {
     ($name: ident, $flag: expr, $cond: expr) => {
@@ -18,10 +18,10 @@ macro_rules! branch_fn {
 
                         emu.regs.pc = final_addr;
                     }
-                },
-                _ => unreachable!()
+                }
+                _ => unreachable!(),
             }
-        
+
             extra_cycles
         }
     };

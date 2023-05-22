@@ -1,7 +1,6 @@
-use super::{Emulator, instructions::Operand, StatusRegister};
+use super::{instructions::Operand, Emulator, StatusRegister};
 
 pub fn brk(emu: &mut Emulator, op: Operand) -> usize {
-    todo!();
     match op {
         Operand::Implied => {
             emu.push_on_stack(emu.regs.flags.bits());
@@ -10,7 +9,7 @@ pub fn brk(emu: &mut Emulator, op: Operand) -> usize {
                 let ret = emu.regs.pc;
                 ((ret >> 8) as u8, (ret & 0xFF) as u8)
             };
-        
+
             emu.push_on_stack(ret_low);
             emu.push_on_stack(ret_high);
 
@@ -20,10 +19,10 @@ pub fn brk(emu: &mut Emulator, op: Operand) -> usize {
             let addr = addr_high << 8 | addr_low;
 
             emu.regs.pc = addr;
-        },
-        _ => unreachable!()
+        }
+        _ => unreachable!(),
     };
-    
+
     0
 }
 
@@ -31,12 +30,12 @@ pub fn jmp(emu: &mut Emulator, op: Operand) -> usize {
     match op {
         Operand::Absolute(addr) => {
             emu.regs.pc = addr;
-        },
+        }
         Operand::AbsoluteIndirect(addr) => {
-            let final_addr = emu.get_indirect_address(addr);
+            let final_addr = emu.get_indirect_address_wrapping(addr);
             emu.regs.pc = final_addr;
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 
     0
@@ -49,13 +48,13 @@ pub fn jsr(emu: &mut Emulator, op: Operand) -> usize {
                 let ret = emu.regs.pc - 1;
                 ((ret >> 8) as u8, (ret & 0xFF) as u8)
             };
-        
+
             emu.push_on_stack(ret_high);
             emu.push_on_stack(ret_low);
-        
+
             emu.regs.pc = addr;
-        }, 
-        _ => unreachable!()
+        }
+        _ => unreachable!(),
     };
 
     0
@@ -73,8 +72,8 @@ pub fn rti(emu: &mut Emulator, op: Operand) -> usize {
 
             emu.regs.flags = StatusRegister::from_bits(status).unwrap();
             emu.regs.pc = ret_addr;
-        },
-        _ => unreachable!()
+        }
+        _ => unreachable!(),
     }
 
     0
@@ -89,8 +88,8 @@ pub fn rts(emu: &mut Emulator, op: Operand) -> usize {
             let ret_addr = ret_high << 8 | ret_low;
 
             emu.regs.pc = ret_addr + 1;
-        },
-        _ => unreachable!()
+        }
+        _ => unreachable!(),
     }
 
     0

@@ -1,4 +1,40 @@
-use super::{instructions::Operand, utils, Emulator, StatusRegister};
+use super::{arithmetic, instructions::Operand, utils, Emulator, StatusRegister};
+
+fn rotate_left(emu: &mut Emulator, val: u8, set_flags: bool) -> u8 {
+    let mut new_val = val << 1;
+    if emu.regs.flags.contains(StatusRegister::CARRY) {
+        new_val |= 1 << 0;
+    }
+
+    if set_flags {
+        let carry = val & (1 << 7) > 0;
+        let negative = new_val & (1 << 7) > 0;
+
+        emu.regs.flags.set(StatusRegister::CARRY, carry);
+        emu.regs.flags.set(StatusRegister::NEGATIVE, negative);
+        emu.regs.flags.set(StatusRegister::ZERO, new_val == 0);
+    }
+
+    new_val
+}
+
+fn rotate_right(emu: &mut Emulator, val: u8, set_flags: bool) -> u8 {
+    let mut new_val = val >> 1;
+    if emu.regs.flags.contains(StatusRegister::CARRY) {
+        new_val |= 1 << 7;
+    }
+
+    if set_flags {
+        let carry = val & (1 << 0) > 0;
+        let negative = new_val & (1 << 7) > 0;
+
+        emu.regs.flags.set(StatusRegister::CARRY, carry);
+        emu.regs.flags.set(StatusRegister::NEGATIVE, negative);
+        emu.regs.flags.set(StatusRegister::ZERO, new_val == 0);
+    }
+
+    new_val
+}
 
 fn get_logical_operand(emu: &mut Emulator, op: Operand) -> Option<u16> {
     match op {
@@ -66,31 +102,16 @@ pub fn lsr(emu: &mut Emulator, op: Operand) -> usize {
 pub fn rol(emu: &mut Emulator, op: Operand) -> usize {
     let addr = get_logical_operand(emu, op);
 
-    let (new_val, carry, negative) = if let Some(addr) = addr {
-        let val = emu.mem[addr as usize];
-
-        let mut new_val = val << 1;
-        if emu.regs.flags.contains(StatusRegister::CARRY) {
-            new_val |= 1 << 0;
+    match addr {
+        Some(addr) => {
+            let val = emu.mem[addr as usize];
+            emu.mem[addr as usize] = rotate_left(emu, val, true);
         }
-        emu.mem[addr as usize] = new_val;
-
-        (new_val, val & (1 << 7) > 0, val & (1 << 6) > 0)
-    } else {
-        let val = emu.regs.a;
-
-        let mut new_val = val << 1;
-        if emu.regs.flags.contains(StatusRegister::CARRY) {
-            new_val |= 1 << 0;
+        None => {
+            let val = emu.regs.a;
+            emu.regs.a = rotate_left(emu, val, true);
         }
-        emu.regs.a = new_val;
-
-        (new_val, val & (1 << 7) > 0, val & (1 << 6) > 0)
     };
-
-    emu.regs.flags.set(StatusRegister::CARRY, carry);
-    emu.regs.flags.set(StatusRegister::NEGATIVE, negative);
-    emu.regs.flags.set(StatusRegister::ZERO, new_val == 0);
 
     0
 }
@@ -98,42 +119,27 @@ pub fn rol(emu: &mut Emulator, op: Operand) -> usize {
 pub fn ror(emu: &mut Emulator, op: Operand) -> usize {
     let addr = get_logical_operand(emu, op);
 
-    let (new_val, carry, negative) = if let Some(addr) = addr {
-        let val = emu.mem[addr as usize];
-
-        let mut new_val = val >> 1;
-        if emu.regs.flags.contains(StatusRegister::CARRY) {
-            new_val |= 1 << 7;
+    match addr {
+        Some(addr) => {
+            let val = emu.mem[addr as usize];
+            emu.mem[addr as usize] = rotate_right(emu, val, true);
         }
-        emu.mem[addr as usize] = new_val;
-
-        (new_val, val & (1 << 0) > 0, new_val & (1 << 7) > 0)
-    } else {
-        let val = emu.regs.a;
-
-        let mut new_val = val >> 1;
-        if emu.regs.flags.contains(StatusRegister::CARRY) {
-            new_val |= 1 << 7;
+        None => {
+            let val = emu.regs.a;
+            emu.regs.a = rotate_right(emu, val, true);
         }
-        emu.regs.a = new_val;
-
-        (new_val, val & (1 << 0) > 0, new_val & (1 << 7) > 0)
     };
-
-    emu.regs.flags.set(StatusRegister::CARRY, carry);
-    emu.regs.flags.set(StatusRegister::NEGATIVE, negative);
-    emu.regs.flags.set(StatusRegister::ZERO, new_val == 0);
 
     0
 }
 
 pub fn and(emu: &mut Emulator, op: Operand) -> usize {
-    let (val, extra_cycles) = utils::get_val_from_operand(emu, op);
+    let val = utils::get_val_from_operand(emu, op);
 
     let new_val = val & emu.regs.a;
     emu.set_a(new_val);
 
-    extra_cycles
+    0
 }
 
 pub fn bit(emu: &mut Emulator, op: Operand) -> usize {
@@ -157,19 +163,84 @@ pub fn bit(emu: &mut Emulator, op: Operand) -> usize {
 }
 
 pub fn eor(emu: &mut Emulator, op: Operand) -> usize {
-    let (val, extra_cycles) = utils::get_val_from_operand(emu, op);
+    let val = utils::get_val_from_operand(emu, op);
 
     let new_val = val ^ emu.regs.a;
     emu.set_a(new_val);
 
-    extra_cycles
+    0
 }
 
 pub fn ora(emu: &mut Emulator, op: Operand) -> usize {
-    let (val, extra_cycles) = utils::get_val_from_operand(emu, op);
+    let val = utils::get_val_from_operand(emu, op);
 
     let new_val = val | emu.regs.a;
     emu.set_a(new_val);
 
-    extra_cycles
+    0
+}
+
+//
+//
+// Unofficial
+//
+//
+
+pub fn slo(emu: &mut Emulator, op: Operand) -> usize {
+    let addr = utils::get_addr_from_operand(emu, op);
+    let val = emu.mem[addr as usize];
+    let new_val = val << 1;
+
+    emu.regs
+        .flags
+        .set(StatusRegister::CARRY, val & (1 << 7) > 0);
+
+    let res = emu.regs.a | new_val;
+
+    emu.set_a(res);
+    emu.mem[addr as usize] = new_val;
+
+    0
+}
+
+pub fn sre(emu: &mut Emulator, op: Operand) -> usize {
+    let addr = utils::get_addr_from_operand(emu, op);
+    let val = emu.mem[addr as usize];
+    let new_val = val >> 1;
+
+    emu.regs
+        .flags
+        .set(StatusRegister::CARRY, val & (1 << 0) > 0);
+
+    let res = emu.regs.a ^ new_val;
+
+    emu.set_a(res);
+    emu.mem[addr as usize] = new_val;
+
+    0
+}
+
+pub fn rla(emu: &mut Emulator, op: Operand) -> usize {
+    let addr = utils::get_addr_from_operand(emu, op);
+    let val = emu.mem[addr as usize];
+
+    let new_val = rotate_left(emu, val, true);
+    let new_acc = emu.regs.a & new_val;
+
+    emu.set_a(new_acc);
+    emu.mem[addr as usize] = new_val;
+
+    0
+}
+
+pub fn rra(emu: &mut Emulator, op: Operand) -> usize {
+    let addr = utils::get_addr_from_operand(emu, op);
+    let val = emu.mem[addr as usize];
+
+    let new_val = rotate_right(emu, val, true);
+
+    arithmetic::do_adc(emu, new_val);
+    emu.mem[addr as usize] = new_val;
+
+    0
 }

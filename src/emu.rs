@@ -105,21 +105,20 @@ impl Emulator {
             }
             Operand::Absolute(addr) => format!("{} ${:04X}", inst.name, addr),
             Operand::AbsoluteIndirect(addr) => format!("{} (${:04X})", inst.name, addr),
-            Operand::AbsoluteIndexedX(addr) => format!("{} ${:04X}, X", inst.name, addr),
-            Operand::AbsoluteIndexedY(addr) => format!("{} ${:04X}, Y", inst.name, addr),
-            Operand::ZeroPageIndexedX(operand) => format!("{} ${:02X}, X", inst.name, operand),
-            Operand::ZeroPageIndexedY(operand) => format!("{} ${:02X}, Y", inst.name, operand),
+            Operand::AbsoluteIndexedX(addr) => format!("{} ${:04X},X", inst.name, addr),
+            Operand::AbsoluteIndexedY(addr) => format!("{} ${:04X},Y", inst.name, addr),
+            Operand::ZeroPageIndexedX(operand) => format!("{} ${:02X},X", inst.name, operand),
+            Operand::ZeroPageIndexedY(operand) => format!("{} ${:02X},Y", inst.name, operand),
             Operand::ZeroPageIndexedXIndirect(operand) => {
-                format!("{} (${:02X}, X)", inst.name, operand)
+                format!("{} (${:02X},X)", inst.name, operand)
             }
             Operand::ZeroPageIndirectIndexedY(operand) => {
-                format!("{} (${:02X}), Y", inst.name, operand)
+                format!("{} (${:02X}),Y", inst.name, operand)
             }
         }
     }
 
     fn load_buff_to_mem(&mut self, buff: &[u8], offset: usize) {
-        println!("{} {}", buff.len(), self.mem.len());
         assert!(offset + buff.len() <= self.mem.len());
 
         let dest = &mut self.mem[offset..offset + buff.len()];
@@ -140,9 +139,16 @@ impl Emulator {
         self.mem[addr]
     }
 
-    fn get_indirect_address(&mut self, addr: u16) -> u16 {
+    fn get_zero_page_indirect_address(&mut self, off: u8) -> u16 {
+        let low = self.mem[off as usize];
+        let high = self.mem[off.wrapping_add(1) as usize];
+        u16::from_le_bytes([low, high])
+    }
+
+    fn get_indirect_address_wrapping(&mut self, addr: u16) -> u16 {
         let low = self.mem[addr as usize];
-        let high = self.mem[addr as usize + 1];
+        let high_addr = (addr & 0xFF00) + ((addr + 1) & 0x00FF);
+        let high = self.mem[high_addr as usize];
         u16::from_le_bytes([low, high])
     }
 
@@ -163,7 +169,7 @@ impl Emulator {
 
                     let ins_str = self.format_instruction(ins, operand);
                     println!(
-                        "{:X}:\t{:<12}A: ${:<02X} X: ${:<02X} Y: ${:<02X} SP: ${:<02X} P: {:?}",
+                        "{:<04X}:\t{:<12}A: ${:<02X} X: ${:<02X} Y: ${:<02X} SP: ${:<02X} P: {:?}",
                         self.regs.pc,
                         ins_str,
                         self.regs.a,

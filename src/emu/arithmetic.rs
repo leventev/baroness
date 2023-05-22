@@ -1,50 +1,37 @@
-use super::{instructions::Operand, utils, Emulator, StatusRegister};
+use super::{
+    instructions::Operand,
+    utils::{self, get_addr_from_operand},
+    Emulator, StatusRegister,
+};
 
-pub fn adc(emu: &mut Emulator, op: Operand) -> usize {
-    let (val, extra_cycles) = utils::get_val_from_operand(emu, op);
-    let val = val as i8;
+pub fn do_adc(emu: &mut Emulator, val: u8) {
+    let acc = emu.regs.a as usize;
+    let val = val as usize;
 
-    let acc = emu.regs.a as isize;
-    let value = val as isize;
-
-    let (new_val, carry_over, overflow) = if value & (1 << 7) > 0 {
-        let mut full_val = acc.wrapping_sub(-value & 0xFF);
-        if full_val < 0 {
-            full_val |= 1 << 7;
-        }
-
-        let mut carry_over = false;
-
-        let mut new_val = full_val as i8;
-        if emu.regs.flags.contains(StatusRegister::CARRY) {
-            let res = new_val.wrapping_add(1);
-            carry_over = res > new_val;
-            new_val = res;
-        }
-
-        (new_val, carry_over, new_val > acc as i8)
+    let carry = if emu.regs.flags.contains(StatusRegister::CARRY) {
+        1
     } else {
-        let full_val = acc.wrapping_add(value);
-
-        let mut new_val = full_val as i8;
-        if emu.regs.flags.contains(StatusRegister::CARRY) {
-            new_val = new_val.wrapping_add(1);
-        }
-
-        (new_val, full_val >> 8 != 0, new_val < acc as i8)
+        0
     };
 
-    emu.regs.flags.set(StatusRegister::CARRY, carry_over);
+    let temp = acc + val + carry;
+
+    let carry = temp >> 8 > 0;
+    let overflow = (!(acc ^ val) & (acc ^ temp) & 0x80) > 0;
+    let new_a = (temp & 0xFF) as u8;
+
     emu.regs.flags.set(StatusRegister::OVERFLOW, overflow);
+    emu.regs.flags.set(StatusRegister::CARRY, carry);
 
-    emu.set_a(new_val as u8);
-
-    extra_cycles
+    emu.set_a(new_a);
 }
 
-pub fn cmp(emu: &mut Emulator, op: Operand) -> usize {
-    let (val, extra_cycles) = utils::get_val_from_operand(emu, op);
-    let (val, _) = emu.regs.a.overflowing_sub(val);
+fn do_sbc(emu: &mut Emulator, val: u8) {
+    do_adc(emu, val ^ 0xFF);
+}
+
+fn do_cmp(emu: &mut Emulator, val: u8) {
+    let val = emu.regs.a.wrapping_sub(val);
 
     emu.regs.flags.set(StatusRegister::CARRY, val <= emu.regs.a);
 
@@ -53,8 +40,22 @@ pub fn cmp(emu: &mut Emulator, op: Operand) -> usize {
         .set(StatusRegister::NEGATIVE, val & (1 << 7) != 0);
 
     emu.regs.flags.set(StatusRegister::ZERO, val == 0);
+}
 
-    extra_cycles
+pub fn adc(emu: &mut Emulator, op: Operand) -> usize {
+    let val = utils::get_val_from_operand(emu, op);
+
+    do_adc(emu, val);
+
+    0
+}
+
+pub fn cmp(emu: &mut Emulator, op: Operand) -> usize {
+    let val = utils::get_val_from_operand(emu, op);
+
+    do_cmp(emu, val);
+
+    0
 }
 
 pub fn cpx(emu: &mut Emulator, op: Operand) -> usize {
@@ -98,42 +99,11 @@ pub fn cpy(emu: &mut Emulator, op: Operand) -> usize {
 }
 
 pub fn sbc(emu: &mut Emulator, op: Operand) -> usize {
-    let (val, extra_cycles) = utils::get_val_from_operand(emu, op);
-    let val = val as i8;
+    let val = utils::get_val_from_operand(emu, op);
 
-    let acc = emu.regs.a as isize;
-    let value = val as isize;
+    do_sbc(emu, val);
 
-    let (new_val, overflow) = if value & (1 << 7) > 0 {
-        let mut full_val = acc.wrapping_add(-value & 0xFF);
-        if full_val < 0 {
-            full_val |= 1 << 7;
-        }
-
-        let mut new_val = full_val as i8;
-        if !emu.regs.flags.contains(StatusRegister::CARRY) {
-            let res = new_val.wrapping_sub(1);
-            new_val = res;
-        }
-
-        (new_val, new_val < acc as i8)
-    } else {
-        let full_val = acc.wrapping_sub(value);
-
-        let mut new_val = full_val as i8;
-        if !emu.regs.flags.contains(StatusRegister::CARRY) {
-            new_val = new_val.wrapping_sub(1);
-        }
-
-        (new_val, new_val > acc as i8)
-    };
-
-    emu.regs.flags.set(StatusRegister::CARRY, new_val >= 0);
-    emu.regs.flags.set(StatusRegister::OVERFLOW, overflow);
-
-    emu.set_a(new_val as u8);
-
-    extra_cycles
+    0
 }
 
 pub fn dec(emu: &mut Emulator, op: Operand) -> usize {
@@ -204,6 +174,34 @@ pub fn iny(emu: &mut Emulator, op: Operand) -> usize {
         Operand::Implied => emu.set_y(emu.regs.y.wrapping_add(1)),
         _ => unreachable!(),
     }
+
+    0
+}
+
+//
+//
+// Unofficial
+//
+//
+
+pub fn dcp(emu: &mut Emulator, op: Operand) -> usize {
+    let addr = get_addr_from_operand(emu, op);
+    let val = emu.mem[addr as usize];
+
+    let subbed = (val as i8).wrapping_sub(1);
+    do_cmp(emu, subbed as u8);
+    emu.mem[addr as usize] = subbed as u8;
+
+    0
+}
+
+pub fn isc(emu: &mut Emulator, op: Operand) -> usize {
+    let addr = get_addr_from_operand(emu, op);
+    let val = emu.mem[addr as usize];
+
+    let added = (val as i8).wrapping_add(1);
+    do_sbc(emu, added as u8);
+    emu.mem[addr as usize] = added as u8;
 
     0
 }

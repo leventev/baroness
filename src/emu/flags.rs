@@ -1,4 +1,4 @@
-use super::{Emulator, instructions::Operand, StatusRegister};
+use super::{instructions::Operand, Emulator, StatusRegister};
 
 macro_rules! flags_fn {
     ($name: ident, $flag: expr, $cond: expr) => {
@@ -6,10 +6,10 @@ macro_rules! flags_fn {
             match op {
                 Operand::Implied => {
                     emu.regs.flags.set($flag, $cond);
-                },
-                _ => unreachable!()
+                }
+                _ => unreachable!(),
             }
-        
+
             0
         }
     };

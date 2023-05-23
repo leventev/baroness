@@ -207,7 +207,7 @@ pub fn lax(emu: &mut Emulator, op: Operand) -> usize {
         Operand::AbsoluteIndexedY(addr) => {
             let final_addr = addr.wrapping_add(emu.regs.y as u16);
             // page crossed
-            if final_addr & 0x00FF != addr & 0x00FF {
+            if final_addr & 0xFF00 != addr & 0xFF00 {
                 extra_cycles += 1;
             }
 
@@ -227,7 +227,7 @@ pub fn lax(emu: &mut Emulator, op: Operand) -> usize {
             let addr = emu.get_zero_page_indirect_address(off);
             let final_addr = addr.wrapping_add(emu.regs.y as u16);
             // page crossed
-            if final_addr & 0x00FF != addr & 0x00FF {
+            if final_addr & 0xFF00 != addr & 0xFF00 {
                 extra_cycles += 1;
             }
 

@@ -160,6 +160,8 @@ impl Emulator {
     }
 
     fn emulate(&mut self) {
+        let mut cycles = 7;
+
         loop {
             let opcode = self.mem[self.regs.pc as usize];
             let instruction = &INSTRUCTIONS[opcode as usize];
@@ -169,18 +171,21 @@ impl Emulator {
 
                     let ins_str = self.format_instruction(ins, operand);
                     println!(
-                        "{:<04X}:\t{:<12}A: ${:<02X} X: ${:<02X} Y: ${:<02X} SP: ${:<02X} P: {:?}",
+                        "{:<04X}:\t{:<12}A: ${:<02X} X: ${:<02X} Y: ${:<02X} SP: ${:<02X} CYCLES: {:<6} P: {:?}",
                         self.regs.pc,
                         ins_str,
                         self.regs.a,
                         self.regs.x,
                         self.regs.y,
                         self.regs.sp,
-                        self.regs.flags
+                        cycles,
+                        self.regs.flags,
                     );
 
                     self.regs.pc += ins.bytes as u16;
-                    (ins.callback)(self, operand);
+                    let extra_cycles = (ins.callback)(self, operand);
+
+                    cycles += ins.cycles + extra_cycles;
                 }
                 None => panic!("invalid opcode {}", opcode),
             }

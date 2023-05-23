@@ -1,4 +1,6 @@
-use super::{instructions::Operand, Emulator, StatusRegister};
+use crate::emu::StatusRegister;
+
+use super::{Emulator, Operand};
 
 macro_rules! flags_fn {
     ($name: ident, $flag: expr, $cond: expr) => {

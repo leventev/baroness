@@ -1,4 +1,14 @@
-use super::{arithmetic, branch, control, flags, load, logic, misc, stack, trans, Emulator};
+use super::emu::Emulator;
+
+mod arithmetic;
+mod branch;
+mod control;
+mod flags;
+mod load;
+mod logic;
+mod misc;
+mod stack;
+mod trans;
 
 #[derive(Clone, Copy, Debug)]
 pub enum AddressingMode {

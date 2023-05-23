@@ -1,4 +1,6 @@
-use super::{instructions::Operand, Emulator, StatusRegister};
+use crate::emu::{Emulator, StatusRegister};
+
+use super::Operand;
 
 macro_rules! branch_fn {
     ($name: ident, $flag: expr, $cond: expr) => {

@@ -1,24 +1,10 @@
-use self::instructions::{AddressingMode, Instruction, Operand, INSTRUCTIONS};
+use super::inst::{AddressingMode, Instruction, Operand, INSTRUCTIONS};
 
 const MEMORY_SIZE: usize = usize::pow(2, 16);
 
-mod arithmetic;
-mod branch;
-mod control;
-mod flags;
-mod load;
-mod logic;
-mod misc;
-mod stack;
-mod trans;
-
-mod utils;
-
-mod instructions;
-
 bitflags::bitflags! {
     #[derive(Debug)]
-    struct StatusRegister: u8 {
+    pub struct StatusRegister: u8 {
         const CARRY = 1 << 0;
         const ZERO = 1 << 1;
         const INTERRUPT_DISABLE = 1 << 2;
@@ -30,40 +16,26 @@ bitflags::bitflags! {
     }
 }
 
-struct Registers {
-    a: u8,
-    x: u8,
-    y: u8,
-    sp: u8,
-    pc: u16,
-    flags: StatusRegister,
+pub struct Registers {
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
+    pub sp: u8,
+    pub pc: u16,
+    pub flags: StatusRegister,
 }
 
 pub struct Emulator {
     mem: Box<[u8]>,
-    regs: Registers,
+    pub regs: Registers,
 }
 
 impl Emulator {
-    pub fn new() -> Emulator {
-        Emulator {
-            mem: vec![0; MEMORY_SIZE].into_boxed_slice(),
-            regs: Registers {
-                a: 0,
-                x: 0,
-                y: 0,
-                sp: 0xFD,
-                pc: 0,
-                flags: StatusRegister::ALWAYS_SET,
-            },
-        }
-    }
-
     fn get_operand(&self, addresing_mode: AddressingMode) -> Operand {
-        let single_operand = self.mem[self.regs.pc as usize + 1];
+        let single_operand = self.read(self.regs.pc.wrapping_add(1));
         let address_operand = {
-            let high = self.mem[self.regs.pc as usize + 1];
-            let low = self.mem[self.regs.pc as usize + 2];
+            let high = self.read(self.regs.pc.wrapping_add(1));
+            let low = self.read(self.regs.pc.wrapping_add(2));
             u16::from_le_bytes([high, low])
         };
 
@@ -125,45 +97,11 @@ impl Emulator {
         dest.copy_from_slice(buff);
     }
 
-    fn push_on_stack(&mut self, val: u8) {
-        let addr = 0x100 + self.regs.sp as usize;
-
-        self.mem[addr] = val;
-        self.regs.sp -= 1;
-    }
-
-    fn pop_stack(&mut self) -> u8 {
-        self.regs.sp += 1;
-        let addr = 0x100 + self.regs.sp as usize;
-
-        self.mem[addr]
-    }
-
-    fn get_zero_page_indirect_address(&mut self, off: u8) -> u16 {
-        let low = self.mem[off as usize];
-        let high = self.mem[off.wrapping_add(1) as usize];
-        u16::from_le_bytes([low, high])
-    }
-
-    fn get_indirect_address_wrapping(&mut self, addr: u16) -> u16 {
-        let low = self.mem[addr as usize];
-        let high_addr = (addr & 0xFF00) + ((addr + 1) & 0x00FF);
-        let high = self.mem[high_addr as usize];
-        u16::from_le_bytes([low, high])
-    }
-
-    fn set_zero_and_negative_flags(&mut self, val: u8) {
-        self.regs.flags.set(StatusRegister::ZERO, val == 0);
-        self.regs
-            .flags
-            .set(StatusRegister::NEGATIVE, val & 1 << 7 != 0);
-    }
-
     fn emulate(&mut self) {
         let mut cycles = 7;
 
         loop {
-            let opcode = self.mem[self.regs.pc as usize];
+            let opcode = self.read(self.regs.pc);
             let instruction = &INSTRUCTIONS[opcode as usize];
             match instruction {
                 Some(ins) => {
@@ -192,21 +130,6 @@ impl Emulator {
         }
     }
 
-    fn set_a(&mut self, val: u8) {
-        self.regs.a = val;
-        self.set_zero_and_negative_flags(self.regs.a);
-    }
-
-    fn set_x(&mut self, val: u8) {
-        self.regs.x = val;
-        self.set_zero_and_negative_flags(self.regs.x);
-    }
-
-    fn set_y(&mut self, val: u8) {
-        self.regs.y = val;
-        self.set_zero_and_negative_flags(self.regs.y);
-    }
-
     pub fn load_program(&mut self, file: &[u8], load_offset: usize) {
         assert!(load_offset < u16::MAX as usize);
         self.load_buff_to_mem(file, load_offset);
@@ -215,5 +138,134 @@ impl Emulator {
 
     pub fn start_emulation(&mut self) {
         self.emulate();
+    }
+
+    pub fn set_a(&mut self, val: u8) {
+        self.regs.a = val;
+        self.set_zero_and_negative_flags(self.regs.a);
+    }
+
+    pub fn set_x(&mut self, val: u8) {
+        self.regs.x = val;
+        self.set_zero_and_negative_flags(self.regs.x);
+    }
+
+    pub fn set_y(&mut self, val: u8) {
+        self.regs.y = val;
+        self.set_zero_and_negative_flags(self.regs.y);
+    }
+
+    pub fn push_on_stack(&mut self, val: u8) {
+        let addr = 0x100 + self.regs.sp as usize;
+
+        self.mem[addr] = val;
+        self.regs.sp -= 1;
+    }
+
+    pub fn pop_stack(&mut self) -> u8 {
+        self.regs.sp += 1;
+        let addr = 0x100 + self.regs.sp as u16;
+
+        self.read(addr)
+    }
+
+    fn get_zero_page_indirect_address(&mut self, off: u8) -> u16 {
+        let low = self.read(off as u16);
+        let high = self.read(off.wrapping_add(1) as u16);
+        u16::from_le_bytes([low, high])
+    }
+
+    pub fn get_indirect_address_wrapping(&mut self, addr: u16) -> u16 {
+        let low = self.read(addr);
+        let high_addr = (addr & 0xFF00) + ((addr + 1) & 0x00FF);
+        let high = self.read(high_addr);
+        u16::from_le_bytes([low, high])
+    }
+
+    pub fn set_zero_and_negative_flags(&mut self, val: u8) {
+        self.regs.flags.set(StatusRegister::ZERO, val == 0);
+        self.regs
+            .flags
+            .set(StatusRegister::NEGATIVE, val & 1 << 7 != 0);
+    }
+
+    pub fn get_val_from_operand(&mut self, op: Operand) -> u8 {
+        if let Operand::Immediate(val) = op {
+            val
+        } else {
+            let addr = self.get_addr_from_operand(op);
+            self.read(addr)
+        }
+    }
+
+    pub fn get_addr_from_operand(&mut self, op: Operand) -> u16 {
+        match op {
+            Operand::Absolute(addr) => addr,
+            Operand::AbsoluteIndexedX(addr) => addr.wrapping_add(self.regs.x as u16),
+            Operand::AbsoluteIndexedY(addr) => addr.wrapping_add(self.regs.y as u16),
+            Operand::ZeroPage(off) => off as u16,
+            Operand::ZeroPageIndexedX(off) => off.wrapping_add(self.regs.x) as u16,
+            Operand::ZeroPageIndexedY(off) => off.wrapping_add(self.regs.y) as u16,
+            Operand::ZeroPageIndexedXIndirect(off) => {
+                let zp_off = off.wrapping_add(self.regs.x);
+                self.get_zero_page_indirect_address(zp_off)
+            }
+            Operand::ZeroPageIndirectIndexedY(off) => {
+                let addr = self.get_zero_page_indirect_address(off);
+                addr.wrapping_add(self.regs.y as u16)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn get_val_from_operand_cross(&mut self, op: Operand) -> (u8, bool) {
+        let mut page_crossed = false;
+
+        let val = match op {
+            Operand::AbsoluteIndexedX(addr) => {
+                let final_addr = addr.wrapping_add(self.regs.x as u16);
+
+                page_crossed = final_addr & 0xFF00 != addr & 0xFF00;
+                self.read(final_addr)
+            }
+            Operand::AbsoluteIndexedY(addr) => {
+                let final_addr = addr.wrapping_add(self.regs.y as u16);
+                page_crossed = final_addr & 0xFF00 != addr & 0xFF00;
+
+                self.read(final_addr)
+            }
+            Operand::ZeroPageIndirectIndexedY(off) => {
+                let addr = self.get_zero_page_indirect_address(off);
+                let final_addr = addr.wrapping_add(self.regs.y as u16);
+
+                page_crossed = final_addr & 0xFF00 != addr & 0xFF00;
+                self.read(final_addr)
+            }
+            _ => self.get_val_from_operand(op),
+        };
+
+        (val, page_crossed)
+    }
+
+    pub fn read(&self, addr: u16) -> u8 {
+        self.mem[addr as usize]
+    }
+
+    pub fn write(&mut self, addr: u16, val: u8) {
+        self.mem[addr as usize] = val;
+    }
+
+    pub fn new() -> Emulator {
+        Emulator {
+            mem: vec![0; MEMORY_SIZE].into_boxed_slice(),
+            regs: Registers {
+                a: 0,
+                x: 0,
+                y: 0,
+                sp: 0xFD,
+                pc: 0,
+                flags: StatusRegister::ALWAYS_SET,
+            },
+        }
     }
 }

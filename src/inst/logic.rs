@@ -1,4 +1,6 @@
-use super::{arithmetic, instructions::Operand, utils, Emulator, StatusRegister};
+use crate::emu::StatusRegister;
+
+use super::{arithmetic, Emulator, Operand};
 
 fn rotate_left(emu: &mut Emulator, val: u8, set_flags: bool) -> u8 {
     let mut new_val = val << 1;
@@ -39,11 +41,7 @@ fn rotate_right(emu: &mut Emulator, val: u8, set_flags: bool) -> u8 {
 fn get_logical_operand(emu: &mut Emulator, op: Operand) -> Option<u16> {
     match op {
         Operand::Accumulator => None,
-        Operand::Absolute(addr) => Some(addr),
-        Operand::AbsoluteIndexedX(addr) => Some(addr + emu.regs.x as u16),
-        Operand::ZeroPage(off) => Some(off as u16),
-        Operand::ZeroPageIndexedX(off) => Some(off.wrapping_add(emu.regs.x) as u16),
-        _ => unreachable!(),
+        _ => Some(emu.get_addr_from_operand(op)),
     }
 }
 
@@ -51,10 +49,10 @@ pub fn asl(emu: &mut Emulator, op: Operand) -> usize {
     let addr = get_logical_operand(emu, op);
 
     let (new_val, carry, negative) = if let Some(addr) = addr {
-        let val = emu.mem[addr as usize];
+        let val = emu.read(addr);
 
         let new_val = val << 1;
-        emu.mem[addr as usize] = new_val;
+        emu.write(addr, new_val);
 
         (new_val, val & (1 << 7) > 0, new_val & (1 << 7) > 0)
     } else {
@@ -77,10 +75,10 @@ pub fn lsr(emu: &mut Emulator, op: Operand) -> usize {
     let addr = get_logical_operand(emu, op);
 
     let (new_val, carry) = if let Some(addr) = addr {
-        let val = emu.mem[addr as usize];
+        let val = emu.read(addr);
 
         let new_val = val >> 1;
-        emu.mem[addr as usize] = new_val;
+        emu.write(addr, new_val);
 
         (new_val, val & (1 << 0) > 0)
     } else {
@@ -100,16 +98,16 @@ pub fn lsr(emu: &mut Emulator, op: Operand) -> usize {
 }
 
 pub fn rol(emu: &mut Emulator, op: Operand) -> usize {
-    let addr = get_logical_operand(emu, op);
-
-    match addr {
+    match get_logical_operand(emu, op) {
         Some(addr) => {
-            let val = emu.mem[addr as usize];
-            emu.mem[addr as usize] = rotate_left(emu, val, true);
+            let val = emu.read(addr);
+            let rotated = rotate_left(emu, val, true);
+            emu.write(addr, rotated)
         }
         None => {
             let val = emu.regs.a;
-            emu.regs.a = rotate_left(emu, val, true);
+            let rotated = rotate_left(emu, val, true);
+            emu.regs.a = rotated;
         }
     };
 
@@ -117,16 +115,16 @@ pub fn rol(emu: &mut Emulator, op: Operand) -> usize {
 }
 
 pub fn ror(emu: &mut Emulator, op: Operand) -> usize {
-    let addr = get_logical_operand(emu, op);
-
-    match addr {
+    match get_logical_operand(emu, op) {
         Some(addr) => {
-            let val = emu.mem[addr as usize];
-            emu.mem[addr as usize] = rotate_right(emu, val, true);
+            let val = emu.read(addr);
+            let rotated = rotate_right(emu, val, true);
+            emu.write(addr, rotated)
         }
         None => {
             let val = emu.regs.a;
-            emu.regs.a = rotate_right(emu, val, true);
+            let rotated = rotate_right(emu, val, true);
+            emu.regs.a = rotated;
         }
     };
 
@@ -134,7 +132,7 @@ pub fn ror(emu: &mut Emulator, op: Operand) -> usize {
 }
 
 pub fn and(emu: &mut Emulator, op: Operand) -> usize {
-    let val = utils::get_val_from_operand(emu, op);
+    let val = emu.get_val_from_operand(op);
 
     let new_val = val & emu.regs.a;
     emu.set_a(new_val);
@@ -143,11 +141,7 @@ pub fn and(emu: &mut Emulator, op: Operand) -> usize {
 }
 
 pub fn bit(emu: &mut Emulator, op: Operand) -> usize {
-    let val = match op {
-        Operand::Absolute(addr) => emu.mem[addr as usize],
-        Operand::ZeroPage(off) => emu.mem[off as usize],
-        _ => unreachable!(),
-    };
+    let val = emu.get_val_from_operand(op);
 
     emu.regs
         .flags
@@ -163,7 +157,7 @@ pub fn bit(emu: &mut Emulator, op: Operand) -> usize {
 }
 
 pub fn eor(emu: &mut Emulator, op: Operand) -> usize {
-    let val = utils::get_val_from_operand(emu, op);
+    let val = emu.get_val_from_operand(op);
 
     let new_val = val ^ emu.regs.a;
     emu.set_a(new_val);
@@ -172,7 +166,7 @@ pub fn eor(emu: &mut Emulator, op: Operand) -> usize {
 }
 
 pub fn ora(emu: &mut Emulator, op: Operand) -> usize {
-    let val = utils::get_val_from_operand(emu, op);
+    let val = emu.get_val_from_operand(op);
 
     let new_val = val | emu.regs.a;
     emu.set_a(new_val);
@@ -187,8 +181,8 @@ pub fn ora(emu: &mut Emulator, op: Operand) -> usize {
 //
 
 pub fn slo(emu: &mut Emulator, op: Operand) -> usize {
-    let addr = utils::get_addr_from_operand(emu, op);
-    let val = emu.mem[addr as usize];
+    let addr = emu.get_addr_from_operand(op);
+    let val = emu.read(addr);
     let new_val = val << 1;
 
     emu.regs
@@ -198,14 +192,14 @@ pub fn slo(emu: &mut Emulator, op: Operand) -> usize {
     let res = emu.regs.a | new_val;
 
     emu.set_a(res);
-    emu.mem[addr as usize] = new_val;
+    emu.write(addr, new_val);
 
     0
 }
 
 pub fn sre(emu: &mut Emulator, op: Operand) -> usize {
-    let addr = utils::get_addr_from_operand(emu, op);
-    let val = emu.mem[addr as usize];
+    let addr = emu.get_addr_from_operand(op);
+    let val = emu.read(addr);
     let new_val = val >> 1;
 
     emu.regs
@@ -215,32 +209,32 @@ pub fn sre(emu: &mut Emulator, op: Operand) -> usize {
     let res = emu.regs.a ^ new_val;
 
     emu.set_a(res);
-    emu.mem[addr as usize] = new_val;
+    emu.write(addr, new_val);
 
     0
 }
 
 pub fn rla(emu: &mut Emulator, op: Operand) -> usize {
-    let addr = utils::get_addr_from_operand(emu, op);
-    let val = emu.mem[addr as usize];
+    let addr = emu.get_addr_from_operand(op);
+    let val = emu.read(addr);
 
     let new_val = rotate_left(emu, val, true);
     let new_acc = emu.regs.a & new_val;
 
     emu.set_a(new_acc);
-    emu.mem[addr as usize] = new_val;
+    emu.write(addr, new_val);
 
     0
 }
 
 pub fn rra(emu: &mut Emulator, op: Operand) -> usize {
-    let addr = utils::get_addr_from_operand(emu, op);
-    let val = emu.mem[addr as usize];
+    let addr = emu.get_addr_from_operand(op);
+    let val = emu.read(addr);
 
     let new_val = rotate_right(emu, val, true);
 
     arithmetic::do_adc(emu, new_val);
-    emu.mem[addr as usize] = new_val;
+    emu.write(addr, new_val);
 
     0
 }

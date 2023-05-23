@@ -6,6 +6,7 @@ use crate::nes::parse_nes_file;
 
 mod emu;
 mod nes;
+mod inst;
 
 fn main() {
     let filepath = std::env::args().nth(1).expect("NES file path not provided");

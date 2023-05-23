@@ -1,4 +1,6 @@
-use super::{instructions::Operand, Emulator, StatusRegister};
+use crate::emu::{StatusRegister};
+
+use super::{Emulator, Operand};
 
 pub fn pha(emu: &mut Emulator, op: Operand) -> usize {
     match op {

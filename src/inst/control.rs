@@ -1,4 +1,6 @@
-use super::{instructions::Operand, Emulator, StatusRegister};
+use crate::emu::{Emulator, StatusRegister};
+
+use super::Operand;
 
 pub fn brk(emu: &mut Emulator, op: Operand) -> usize {
     match op {
@@ -13,8 +15,8 @@ pub fn brk(emu: &mut Emulator, op: Operand) -> usize {
             emu.push_on_stack(ret_low);
             emu.push_on_stack(ret_high);
 
-            let addr_high = emu.mem[0xFFFE] as u16;
-            let addr_low = emu.mem[0xFFFF] as u16;
+            let addr_high = emu.read(0xFFFE) as u16;
+            let addr_low = emu.read(0xFFFF) as u16;
 
             let addr = addr_high << 8 | addr_low;
 

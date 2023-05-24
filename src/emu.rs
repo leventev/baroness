@@ -1,6 +1,12 @@
+use crate::{
+    mapper::{get_mapper, Mapper},
+    nes::NESFile,
+};
+
 use super::inst::{AddressingMode, Instruction, Operand, INSTRUCTIONS};
 
-const MEMORY_SIZE: usize = usize::pow(2, 16);
+/// 2KiB internal memory
+const INTERNAL_RAM_SIZE: usize = usize::pow(2, 11);
 
 bitflags::bitflags! {
     #[derive(Debug)]
@@ -26,8 +32,9 @@ pub struct Registers {
 }
 
 pub struct Emulator {
-    mem: Box<[u8]>,
+    internal_ram: Box<[u8]>,
     pub regs: Registers,
+    mapper: Box<dyn Mapper>,
 }
 
 impl Emulator {
@@ -90,13 +97,6 @@ impl Emulator {
         }
     }
 
-    fn load_buff_to_mem(&mut self, buff: &[u8], offset: usize) {
-        assert!(offset + buff.len() <= self.mem.len());
-
-        let dest = &mut self.mem[offset..offset + buff.len()];
-        dest.copy_from_slice(buff);
-    }
-
     fn emulate(&mut self) {
         let mut cycles = 7;
 
@@ -130,12 +130,6 @@ impl Emulator {
         }
     }
 
-    pub fn load_program(&mut self, file: &[u8], load_offset: usize) {
-        assert!(load_offset < u16::MAX as usize);
-        self.load_buff_to_mem(file, load_offset);
-        self.regs.pc = load_offset as u16;
-    }
-
     pub fn start_emulation(&mut self) {
         self.emulate();
     }
@@ -158,7 +152,7 @@ impl Emulator {
     pub fn push_on_stack(&mut self, val: u8) {
         let addr = 0x100 + self.regs.sp as usize;
 
-        self.mem[addr] = val;
+        self.internal_ram[addr] = val;
         self.regs.sp -= 1;
     }
 
@@ -230,8 +224,8 @@ impl Emulator {
             }
             Operand::AbsoluteIndexedY(addr) => {
                 let final_addr = addr.wrapping_add(self.regs.y as u16);
-                page_crossed = final_addr & 0xFF00 != addr & 0xFF00;
 
+                page_crossed = final_addr & 0xFF00 != addr & 0xFF00;
                 self.read(final_addr)
             }
             Operand::ZeroPageIndirectIndexedY(off) => {
@@ -248,24 +242,55 @@ impl Emulator {
     }
 
     pub fn read(&self, addr: u16) -> u8 {
-        self.mem[addr as usize]
+        if addr < 0x2000 {
+            // internal ram
+            let off = addr & 0x800;
+            self.internal_ram[off as usize]
+        } else if addr < 0x4000 {
+            // ppu regs
+            todo!()
+        } else if addr < 0x4020 {
+            // apu, io registers
+            todo!()
+        } else {
+            // cartridge space
+            match self.mapper.read(addr) {
+                Ok(val) => val,
+                Err(_) => panic!("Open bus"),
+            }
+        }
     }
 
     pub fn write(&mut self, addr: u16, val: u8) {
-        self.mem[addr as usize] = val;
+        if addr < 0x2000 {
+            // internal ram
+            let off = addr & 0x800;
+            self.internal_ram[off as usize] = val;
+        } else if addr < 0x4000 {
+            // ppu regs
+            todo!()
+        } else if addr < 0x4020 {
+            // apu, io registers
+            todo!()
+        } else {
+            // cartridge space
+            self.mapper.write(addr, val).unwrap();
+        }
     }
 
-    pub fn new() -> Emulator {
+    pub fn new(file: Vec<u8>, nes_file: NESFile) -> Emulator {
+        let mapper = get_mapper(&file, &nes_file);
         Emulator {
-            mem: vec![0; MEMORY_SIZE].into_boxed_slice(),
+            internal_ram: vec![0; INTERNAL_RAM_SIZE].into_boxed_slice(),
             regs: Registers {
                 a: 0,
                 x: 0,
                 y: 0,
                 sp: 0xFD,
-                pc: 0,
+                pc: mapper.entrypoint(),
                 flags: StatusRegister::ALWAYS_SET,
             },
+            mapper,
         }
     }
 }

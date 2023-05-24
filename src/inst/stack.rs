@@ -1,4 +1,4 @@
-use crate::emu::{StatusRegister};
+use crate::emu::StatusRegister;
 
 use super::{Emulator, Operand};
 

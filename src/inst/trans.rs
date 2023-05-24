@@ -1,4 +1,4 @@
-use super::{Operand, Emulator};
+use super::{Emulator, Operand};
 
 pub fn tax(emu: &mut Emulator, op: Operand) -> usize {
     match op {

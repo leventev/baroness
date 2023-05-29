@@ -1,9 +1,16 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crate::{
     mapper::{get_mapper, Mapper},
     nes::NESFile,
 };
 
-use super::inst::{AddressingMode, Instruction, Operand, INSTRUCTIONS};
+use self::{cpu::CPUData, ppu::PPUData};
+
+use super::inst::{AddressingMode, Instruction, Operand};
+
+mod cpu;
+mod ppu;
 
 /// 2KiB internal memory
 const INTERNAL_RAM_SIZE: usize = usize::pow(2, 11);
@@ -32,8 +39,10 @@ pub struct Registers {
 }
 
 pub struct Emulator {
-    internal_ram: Box<[u8]>,
     pub regs: Registers,
+    internal_ram: Box<[u8]>,
+    cpu: CPUData,
+    ppu: PPUData,
     mapper: Box<dyn Mapper>,
 }
 
@@ -79,7 +88,10 @@ impl Emulator {
                 format!(
                     "{} ${:04X}",
                     inst.name,
-                    self.regs.pc + operand as u16 + inst.bytes as u16
+                    self.regs
+                        .pc
+                        .wrapping_add_signed(inst.bytes as i16)
+                        .wrapping_add_signed(operand as i8 as i16)
                 )
             }
             Operand::Absolute(addr) => format!("{} ${:04X}", inst.name, addr),
@@ -98,35 +110,9 @@ impl Emulator {
     }
 
     fn emulate(&mut self) {
-        let mut cycles = 7;
-
         loop {
-            let opcode = self.read(self.regs.pc);
-            let instruction = &INSTRUCTIONS[opcode as usize];
-            match instruction {
-                Some(ins) => {
-                    let operand = self.get_operand(ins.addressing_mode);
-
-                    let ins_str = self.format_instruction(ins, operand);
-                    println!(
-                        "{:<04X}:\t{:<12}A: ${:<02X} X: ${:<02X} Y: ${:<02X} SP: ${:<02X} CYCLES: {:<6} P: {:?}",
-                        self.regs.pc,
-                        ins_str,
-                        self.regs.a,
-                        self.regs.x,
-                        self.regs.y,
-                        self.regs.sp,
-                        cycles,
-                        self.regs.flags,
-                    );
-
-                    self.regs.pc += ins.bytes as u16;
-                    let extra_cycles = (ins.callback)(self, operand);
-
-                    cycles += ins.cycles + extra_cycles;
-                }
-                None => panic!("invalid opcode {}", opcode),
-            }
+            self.clock_cpu();
+            self.clock_ppu();
         }
     }
 
@@ -248,7 +234,7 @@ impl Emulator {
             self.internal_ram[off as usize]
         } else if addr < 0x4000 {
             // ppu regs
-            todo!()
+            self.ppu_read(addr as u8)
         } else if addr < 0x4020 {
             // apu, io registers
             todo!()
@@ -268,7 +254,7 @@ impl Emulator {
             self.internal_ram[off as usize] = val;
         } else if addr < 0x4000 {
             // ppu regs
-            todo!()
+            self.ppu_write(addr as u8, val);
         } else if addr < 0x4020 {
             // apu, io registers
             todo!()
@@ -290,6 +276,8 @@ impl Emulator {
                 pc: mapper.entrypoint(),
                 flags: StatusRegister::ALWAYS_SET,
             },
+            cpu: CPUData::new(),
+            ppu: PPUData::new(),
             mapper,
         }
     }

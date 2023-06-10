@@ -1,4 +1,4 @@
-use crate::emu::{Emulator, StatusRegister};
+use crate::emu::Emulator;
 
 use super::Operand;
 
@@ -6,11 +6,7 @@ pub fn do_adc(emu: &mut Emulator, val: u8) {
     let acc = emu.regs.a as usize;
     let val = val as usize;
 
-    let carry = if emu.regs.flags.contains(StatusRegister::CARRY) {
-        1
-    } else {
-        0
-    };
+    let carry = emu.regs.flags.carry() as usize;
 
     let temp = acc + val + carry;
 
@@ -18,8 +14,8 @@ pub fn do_adc(emu: &mut Emulator, val: u8) {
     let overflow = (!(acc ^ val) & (acc ^ temp) & 0x80) > 0;
     let new_a = (temp & 0xFF) as u8;
 
-    emu.regs.flags.set(StatusRegister::OVERFLOW, overflow);
-    emu.regs.flags.set(StatusRegister::CARRY, carry);
+    emu.regs.flags.set_overflow(overflow as u8);
+    emu.regs.flags.set_carry(carry as u8);
 
     emu.set_a(new_a);
 }
@@ -31,13 +27,11 @@ fn do_sbc(emu: &mut Emulator, val: u8) {
 fn do_cmp(emu: &mut Emulator, val: u8) {
     let val = emu.regs.a.wrapping_sub(val);
 
-    emu.regs.flags.set(StatusRegister::CARRY, val <= emu.regs.a);
+    emu.regs.flags.set_carry((val <= emu.regs.a).into());
 
-    emu.regs
-        .flags
-        .set(StatusRegister::NEGATIVE, val & (1 << 7) != 0);
+    emu.regs.flags.set_negative((val & (1 << 7)) >> 7);
 
-    emu.regs.flags.set(StatusRegister::ZERO, val == 0);
+    emu.regs.flags.set_zero((val == 0).into());
 }
 
 pub fn adc(emu: &mut Emulator, op: Operand) -> usize {
@@ -60,11 +54,9 @@ pub fn cpx(emu: &mut Emulator, op: Operand) -> usize {
 
     let res = reg.wrapping_sub(val);
 
-    emu.regs
-        .flags
-        .set(StatusRegister::CARRY, reg as u8 >= val as u8);
-    emu.regs.flags.set(StatusRegister::ZERO, res == 0);
-    emu.regs.flags.set(StatusRegister::NEGATIVE, res < 0);
+    emu.regs.flags.set_carry((reg as u8 >= val as u8).into());
+    emu.regs.flags.set_zero((res == 0).into());
+    emu.regs.flags.set_negative((res < 0).into());
 
     0
 }
@@ -75,11 +67,9 @@ pub fn cpy(emu: &mut Emulator, op: Operand) -> usize {
 
     let res = reg.wrapping_sub(val);
 
-    emu.regs
-        .flags
-        .set(StatusRegister::CARRY, reg as u8 >= val as u8);
-    emu.regs.flags.set(StatusRegister::ZERO, res == 0);
-    emu.regs.flags.set(StatusRegister::NEGATIVE, res < 0);
+    emu.regs.flags.set_carry((reg as u8 >= val as u8).into());
+    emu.regs.flags.set_zero((res == 0).into());
+    emu.regs.flags.set_negative((res < 0).into());
 
     0
 }

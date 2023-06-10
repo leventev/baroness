@@ -1,5 +1,3 @@
-use crate::emu::StatusRegister;
-
 use super::{Emulator, Operand};
 
 pub fn lda(emu: &mut Emulator, op: Operand) -> usize {
@@ -46,10 +44,8 @@ pub fn lax(emu: &mut Emulator, op: Operand) -> usize {
     emu.regs.a = val;
     emu.regs.x = val;
 
-    emu.regs.flags.set(StatusRegister::ZERO, val == 0);
-    emu.regs
-        .flags
-        .set(StatusRegister::NEGATIVE, val & (1 << 7) > 0);
+    emu.regs.flags.set_zero((val == 0).into());
+    emu.regs.flags.set_negative((val & (1 << 7) > 0).into());
 
     crossed.into()
 }

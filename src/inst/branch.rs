@@ -1,9 +1,9 @@
-use crate::emu::{Emulator, StatusRegister};
+use crate::emu::Emulator;
 
 use super::Operand;
 
 macro_rules! branch_fn {
-    ($name: ident, $flag: expr, $cond: expr) => {
+    ($name: ident, $flag: ident, $cond: expr) => {
         pub fn $name(emu: &mut Emulator, op: Operand) -> usize {
             let mut extra_cycles = 0;
 
@@ -11,7 +11,7 @@ macro_rules! branch_fn {
                 Operand::Relative(off) => {
                     let final_addr = emu.regs.pc.wrapping_add_signed(off as i8 as i16);
 
-                    if emu.regs.flags.contains($flag) == $cond {
+                    if emu.regs.flags.$flag() == $cond {
                         extra_cycles += 1;
 
                         if final_addr & 0xFF00 != emu.regs.pc & 0xFF00 {
@@ -29,11 +29,11 @@ macro_rules! branch_fn {
     };
 }
 
-branch_fn!(bcc, StatusRegister::CARRY, false);
-branch_fn!(bcs, StatusRegister::CARRY, true);
-branch_fn!(beq, StatusRegister::ZERO, true);
-branch_fn!(bne, StatusRegister::ZERO, false);
-branch_fn!(bmi, StatusRegister::NEGATIVE, true);
-branch_fn!(bpl, StatusRegister::NEGATIVE, false);
-branch_fn!(bvc, StatusRegister::OVERFLOW, false);
-branch_fn!(bvs, StatusRegister::OVERFLOW, true);
+branch_fn!(bcc, carry, 0);
+branch_fn!(bcs, carry, 1);
+branch_fn!(beq, zero, 1);
+branch_fn!(bne, zero, 0);
+branch_fn!(bmi, negative, 1);
+branch_fn!(bpl, negative, 0);
+branch_fn!(bvc, overflow, 0);
+branch_fn!(bvs, overflow, 1);

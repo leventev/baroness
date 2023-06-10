@@ -1,13 +1,11 @@
-use crate::emu::StatusRegister;
-
 use super::{Emulator, Operand};
 
 macro_rules! flags_fn {
-    ($name: ident, $flag: expr, $cond: expr) => {
+    ($name: ident, $flag: ident, $cond: expr) => {
         pub fn $name(emu: &mut Emulator, op: Operand) -> usize {
             match op {
                 Operand::Implied => {
-                    emu.regs.flags.set($flag, $cond);
+                    emu.regs.flags.$flag($cond);
                 }
                 _ => unreachable!(),
             }
@@ -17,10 +15,10 @@ macro_rules! flags_fn {
     };
 }
 
-flags_fn!(clc, StatusRegister::CARRY, false);
-flags_fn!(cld, StatusRegister::DECIMAL, false);
-flags_fn!(cli, StatusRegister::INTERRUPT_DISABLE, false);
-flags_fn!(clv, StatusRegister::OVERFLOW, false);
-flags_fn!(sec, StatusRegister::CARRY, true);
-flags_fn!(sed, StatusRegister::DECIMAL, true);
-flags_fn!(sei, StatusRegister::INTERRUPT_DISABLE, true);
+flags_fn!(clc, set_carry, 0);
+flags_fn!(cld, set_decimal, 0);
+flags_fn!(cli, set_interrupt_disable, 0);
+flags_fn!(clv, set_overflow, 0);
+flags_fn!(sec, set_carry, 1);
+flags_fn!(sed, set_decimal, 1);
+flags_fn!(sei, set_interrupt_disable, 1);

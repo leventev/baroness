@@ -1,5 +1,8 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use modular_bitfield::{bitfield, specifiers::B1};
+use sdl2::{event::Event, render::Canvas, video::Window, EventPump};
+
 use crate::{
     mapper::{get_mapper, Mapper},
     nes::NESFile,
@@ -7,26 +10,39 @@ use crate::{
 
 use self::{cpu::CPUData, ppu::PPUData};
 
-use super::inst::{AddressingMode, Instruction, Operand};
-
 mod cpu;
 mod ppu;
 
 /// 2KiB internal memory
 const INTERNAL_RAM_SIZE: usize = usize::pow(2, 11);
 
-bitflags::bitflags! {
-    #[derive(Debug)]
-    pub struct StatusRegister: u8 {
-        const CARRY = 1 << 0;
-        const ZERO = 1 << 1;
-        const INTERRUPT_DISABLE = 1 << 2;
-        const DECIMAL = 1 << 3;
-        const BREAK = 1 << 4;
-        const ALWAYS_SET = 1 << 5;
-        const OVERFLOW = 1 << 6;
-        const NEGATIVE = 1 << 7;
-    }
+/// Original window width
+pub const ORIGINAL_WIDTH: u32 = 256;
+
+/// Original window height
+pub const ORIGINAL_HEIGHT: u32 = 240;
+
+/// How many times should the original resolution(256x240) be scaled up
+pub const WINDOW_SCALE: u32 = 4;
+
+/// Scaled window width
+pub const WINDOW_WIDTH: u32 = WINDOW_SCALE * ORIGINAL_WIDTH;
+
+/// Scaled window height
+pub const WINDOW_HEIGHT: u32 = WINDOW_SCALE * ORIGINAL_HEIGHT;
+
+#[bitfield]
+#[derive(Clone)]
+#[derive(Debug)]
+pub struct StatusRegister {
+    pub carry: B1,
+    pub zero: B1,
+    pub interrupt_disable: B1,
+    pub decimal: B1,
+    pub break_command: B1,
+    pub always_set: B1,
+    pub overflow: B1,
+    pub negative: B1,
 }
 
 pub struct Registers {
@@ -44,75 +60,59 @@ pub struct Emulator {
     cpu: CPUData,
     ppu: PPUData,
     mapper: Box<dyn Mapper>,
+    canvas: Canvas<Window>,
+    event_pump: EventPump,
+    last_time: u128,
+    frame_complete: bool,
+    cycle_counter: usize,
 }
 
 impl Emulator {
-    fn get_operand(&self, addresing_mode: AddressingMode) -> Operand {
-        let single_operand = self.read(self.regs.pc.wrapping_add(1));
-        let address_operand = {
-            let high = self.read(self.regs.pc.wrapping_add(1));
-            let low = self.read(self.regs.pc.wrapping_add(2));
-            u16::from_le_bytes([high, low])
-        };
+    fn clock(&mut self) {
+        self.clock_ppu();
+        self.cycle_counter += 1;
 
-        match addresing_mode {
-            AddressingMode::Accumulator => Operand::Accumulator,
-            AddressingMode::Implied => Operand::Implied,
-            AddressingMode::Immediate => Operand::Immediate(single_operand),
-            AddressingMode::Absolute => Operand::Absolute(address_operand),
-            AddressingMode::ZeroPage => Operand::ZeroPage(single_operand),
-            AddressingMode::Relative => Operand::Relative(single_operand),
-            AddressingMode::AbsoluteIndirect => Operand::AbsoluteIndirect(address_operand),
-            AddressingMode::AbsoluteIndexedX => Operand::AbsoluteIndexedX(address_operand),
-            AddressingMode::AbsoluteIndexedY => Operand::AbsoluteIndexedY(address_operand),
-            AddressingMode::ZeroPageIndexedX => Operand::ZeroPageIndexedX(single_operand),
-            AddressingMode::ZeroPageIndexedY => Operand::ZeroPageIndexedY(single_operand),
-            AddressingMode::ZeroPageIndexedXIndirect => {
-                Operand::ZeroPageIndexedXIndirect(single_operand)
-            }
-            AddressingMode::ZeroPageIndirectIndexedY => {
-                Operand::ZeroPageIndirectIndexedY(single_operand)
-            }
-        }
-    }
-
-    fn format_instruction(&self, inst: &Instruction, op: Operand) -> String {
-        match op {
-            Operand::Implied => inst.name.to_string(),
-            Operand::Accumulator => format!("{} a", inst.name),
-            Operand::Immediate(operand) => format!("{} #${:02X}", inst.name, operand),
-            Operand::ZeroPage(operand) => {
-                format!("{} ${:02X}", inst.name, operand)
-            }
-            Operand::Relative(operand) => {
-                format!(
-                    "{} ${:04X}",
-                    inst.name,
-                    self.regs
-                        .pc
-                        .wrapping_add_signed(inst.bytes as i16)
-                        .wrapping_add_signed(operand as i8 as i16)
-                )
-            }
-            Operand::Absolute(addr) => format!("{} ${:04X}", inst.name, addr),
-            Operand::AbsoluteIndirect(addr) => format!("{} (${:04X})", inst.name, addr),
-            Operand::AbsoluteIndexedX(addr) => format!("{} ${:04X},X", inst.name, addr),
-            Operand::AbsoluteIndexedY(addr) => format!("{} ${:04X},Y", inst.name, addr),
-            Operand::ZeroPageIndexedX(operand) => format!("{} ${:02X},X", inst.name, operand),
-            Operand::ZeroPageIndexedY(operand) => format!("{} ${:02X},Y", inst.name, operand),
-            Operand::ZeroPageIndexedXIndirect(operand) => {
-                format!("{} (${:02X},X)", inst.name, operand)
-            }
-            Operand::ZeroPageIndirectIndexedY(operand) => {
-                format!("{} (${:02X}),Y", inst.name, operand)
-            }
+        if self.cycle_counter == 3 {
+            self.clock_cpu();
+            self.cycle_counter = 0;
         }
     }
 
     fn emulate(&mut self) {
-        loop {
-            self.clock_cpu();
-            self.clock_ppu();
+        const FRAME_TIME: u128 = 1_000_000_000 / 60;
+
+        self.reset();
+
+        let mut running = true;
+        while running {
+            println!("EVENT PUMP");
+            for event in self.event_pump.poll_iter() {
+                match event {
+                    Event::Quit { .. } => running = false,
+                    _ => {}
+                };
+            }
+
+            let mut new_frame = false;
+
+            while !new_frame {
+                let current_time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos();
+
+                let elapsed = current_time - self.last_time;
+                println!("{} {}", elapsed, FRAME_TIME);
+                new_frame = elapsed > FRAME_TIME;
+                if new_frame {
+                    self.last_time = current_time;
+                }
+            }
+
+            while !self.frame_complete {
+                self.clock();
+            }
+            self.frame_complete = false;
         }
     }
 
@@ -120,127 +120,21 @@ impl Emulator {
         self.emulate();
     }
 
-    pub fn set_a(&mut self, val: u8) {
-        self.regs.a = val;
-        self.set_zero_and_negative_flags(self.regs.a);
-    }
-
-    pub fn set_x(&mut self, val: u8) {
-        self.regs.x = val;
-        self.set_zero_and_negative_flags(self.regs.x);
-    }
-
-    pub fn set_y(&mut self, val: u8) {
-        self.regs.y = val;
-        self.set_zero_and_negative_flags(self.regs.y);
-    }
-
-    pub fn push_on_stack(&mut self, val: u8) {
-        let addr = 0x100 + self.regs.sp as usize;
-
-        self.internal_ram[addr] = val;
-        self.regs.sp -= 1;
-    }
-
-    pub fn pop_stack(&mut self) -> u8 {
-        self.regs.sp += 1;
-        let addr = 0x100 + self.regs.sp as u16;
-
-        self.read(addr)
-    }
-
-    fn get_zero_page_indirect_address(&mut self, off: u8) -> u16 {
-        let low = self.read(off as u16);
-        let high = self.read(off.wrapping_add(1) as u16);
-        u16::from_le_bytes([low, high])
-    }
-
-    pub fn get_indirect_address_wrapping(&mut self, addr: u16) -> u16 {
-        let low = self.read(addr);
-        let high_addr = (addr & 0xFF00) + ((addr + 1) & 0x00FF);
-        let high = self.read(high_addr);
-        u16::from_le_bytes([low, high])
-    }
-
-    pub fn set_zero_and_negative_flags(&mut self, val: u8) {
-        self.regs.flags.set(StatusRegister::ZERO, val == 0);
-        self.regs
-            .flags
-            .set(StatusRegister::NEGATIVE, val & 1 << 7 != 0);
-    }
-
-    pub fn get_val_from_operand(&mut self, op: Operand) -> u8 {
-        if let Operand::Immediate(val) = op {
-            val
-        } else {
-            let addr = self.get_addr_from_operand(op);
-            self.read(addr)
-        }
-    }
-
-    pub fn get_addr_from_operand(&mut self, op: Operand) -> u16 {
-        match op {
-            Operand::Absolute(addr) => addr,
-            Operand::AbsoluteIndexedX(addr) => addr.wrapping_add(self.regs.x as u16),
-            Operand::AbsoluteIndexedY(addr) => addr.wrapping_add(self.regs.y as u16),
-            Operand::ZeroPage(off) => off as u16,
-            Operand::ZeroPageIndexedX(off) => off.wrapping_add(self.regs.x) as u16,
-            Operand::ZeroPageIndexedY(off) => off.wrapping_add(self.regs.y) as u16,
-            Operand::ZeroPageIndexedXIndirect(off) => {
-                let zp_off = off.wrapping_add(self.regs.x);
-                self.get_zero_page_indirect_address(zp_off)
-            }
-            Operand::ZeroPageIndirectIndexedY(off) => {
-                let addr = self.get_zero_page_indirect_address(off);
-                addr.wrapping_add(self.regs.y as u16)
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn get_val_from_operand_cross(&mut self, op: Operand) -> (u8, bool) {
-        let mut page_crossed = false;
-
-        let val = match op {
-            Operand::AbsoluteIndexedX(addr) => {
-                let final_addr = addr.wrapping_add(self.regs.x as u16);
-
-                page_crossed = final_addr & 0xFF00 != addr & 0xFF00;
-                self.read(final_addr)
-            }
-            Operand::AbsoluteIndexedY(addr) => {
-                let final_addr = addr.wrapping_add(self.regs.y as u16);
-
-                page_crossed = final_addr & 0xFF00 != addr & 0xFF00;
-                self.read(final_addr)
-            }
-            Operand::ZeroPageIndirectIndexedY(off) => {
-                let addr = self.get_zero_page_indirect_address(off);
-                let final_addr = addr.wrapping_add(self.regs.y as u16);
-
-                page_crossed = final_addr & 0xFF00 != addr & 0xFF00;
-                self.read(final_addr)
-            }
-            _ => self.get_val_from_operand(op),
-        };
-
-        (val, page_crossed)
-    }
-
-    pub fn read(&self, addr: u16) -> u8 {
+    pub fn read(&mut self, addr: u16) -> u8 {
         if addr < 0x2000 {
             // internal ram
-            let off = addr & 0x800;
+            let off = addr & 0x7FF;
             self.internal_ram[off as usize]
         } else if addr < 0x4000 {
             // ppu regs
-            self.ppu_read(addr as u8)
+            self.ppu_read_reg(addr as u8 % 8)
         } else if addr < 0x4020 {
             // apu, io registers
-            todo!()
+            //todo!()
+            0
         } else {
             // cartridge space
-            match self.mapper.read(addr) {
+            match self.mapper.read_cpu(addr) {
                 Ok(val) => val,
                 Err(_) => panic!("Open bus"),
             }
@@ -250,21 +144,38 @@ impl Emulator {
     pub fn write(&mut self, addr: u16, val: u8) {
         if addr < 0x2000 {
             // internal ram
-            let off = addr & 0x800;
+            let off = addr & 0x7FF;
             self.internal_ram[off as usize] = val;
         } else if addr < 0x4000 {
             // ppu regs
-            self.ppu_write(addr as u8, val);
+            self.ppu_write_reg(addr as u8 % 8, val);
         } else if addr < 0x4020 {
             // apu, io registers
-            todo!()
+            //todo!()
         } else {
             // cartridge space
-            self.mapper.write(addr, val).unwrap();
+            self.mapper.write_cpu(addr, val).unwrap();
         }
     }
 
     pub fn new(file: Vec<u8>, nes_file: NESFile) -> Emulator {
+        let sdl_context = sdl2::init().unwrap();
+        let video_subsystem = sdl_context.video().unwrap();
+
+        let window = video_subsystem
+            .window("baroness", WINDOW_WIDTH, WINDOW_HEIGHT)
+            .position_centered()
+            .build()
+            .unwrap();
+
+        let mut canvas = window.into_canvas().build().unwrap();
+
+        canvas.set_draw_color(sdl2::pixels::Color::RGB(255, 0, 0));
+        canvas.clear();
+        canvas.present();
+
+        let event_pump = sdl_context.event_pump().unwrap();
+
         let mapper = get_mapper(&file, &nes_file);
         Emulator {
             internal_ram: vec![0; INTERNAL_RAM_SIZE].into_boxed_slice(),
@@ -274,11 +185,19 @@ impl Emulator {
                 y: 0,
                 sp: 0xFD,
                 pc: mapper.entrypoint(),
-                flags: StatusRegister::ALWAYS_SET,
+                flags: StatusRegister::new().with_always_set(1),
             },
             cpu: CPUData::new(),
             ppu: PPUData::new(),
             mapper,
+            canvas,
+            event_pump,
+            last_time: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+            frame_complete: false,
+            cycle_counter: 0,
         }
     }
 }

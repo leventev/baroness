@@ -1,14 +1,14 @@
-use bitflags::bitflags;
+use modular_bitfield::{bitfield, specifiers::{B1, B4}};
 
 const NES_MAGIC: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
-bitflags! {
-    struct Flags6: u8 {
-        const VERTICAL_MIRRORING = 1 << 0;
-        const PRG_RAM =  1 << 1;
-        const TRAINER =  1 << 2;
-        const IGNORE_MIRRORING_CONTROL = 1 << 3;
-    }
+#[bitfield]
+struct Flags6 {
+    vertical_mirroring: B1,
+    prg_ram: B1,
+    trainer: B1,
+    ignore_mirroring_control: B1,
+    ignore: B4
 }
 
 pub enum MirroringMode {
@@ -43,7 +43,7 @@ pub fn parse_nes_file(file: &[u8]) -> Result<NESFile, ()> {
 
     let prg_rom_size = file[4];
     let chr_rom_size = file[5];
-    let flags_6 = Flags6::from_bits_retain(file[6]);
+    let flags_6 = Flags6::from_bytes([file[6]]);
     let flags_7 = file[7];
     let _flags_8 = file[8];
     let _flags_9 = file[9];
@@ -52,14 +52,14 @@ pub fn parse_nes_file(file: &[u8]) -> Result<NESFile, ()> {
     let nes = NESFile {
         prg_rom_size,
         chr_rom_size,
-        mirroring_mode: if flags_6.contains(Flags6::VERTICAL_MIRRORING) {
+        mirroring_mode: if flags_6.vertical_mirroring() > 0 {
             MirroringMode::Vertical
         } else {
             MirroringMode::Horizontal
         },
-        has_prg_ram: flags_6.contains(Flags6::PRG_RAM),
-        has_trainer: flags_6.contains(Flags6::TRAINER),
-        mapper_number: flags_6.bits() >> 4 | flags_7 & 0b11110000,
+        has_prg_ram: flags_6.prg_ram() > 0,
+        has_trainer: flags_6.trainer() >0,
+        mapper_number: flags_6.into_bytes()[0] >> 4 | flags_7 & 0b11110000,
     };
 
     Ok(nes)

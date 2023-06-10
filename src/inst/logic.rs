@@ -1,38 +1,30 @@
-use crate::emu::StatusRegister;
-
 use super::{arithmetic, Emulator, Operand};
 
 fn rotate_left(emu: &mut Emulator, val: u8, set_flags: bool) -> u8 {
-    let mut new_val = val << 1;
-    if emu.regs.flags.contains(StatusRegister::CARRY) {
-        new_val |= 1 << 0;
-    }
+    let new_val = val << 1 | emu.regs.flags.carry();
 
     if set_flags {
         let carry = val & (1 << 7) > 0;
         let negative = new_val & (1 << 7) > 0;
 
-        emu.regs.flags.set(StatusRegister::CARRY, carry);
-        emu.regs.flags.set(StatusRegister::NEGATIVE, negative);
-        emu.regs.flags.set(StatusRegister::ZERO, new_val == 0);
+        emu.regs.flags.set_carry(carry.into());
+        emu.regs.flags.set_negative(negative.into());
+        emu.regs.flags.set_zero((new_val == 0).into());
     }
 
     new_val
 }
 
 fn rotate_right(emu: &mut Emulator, val: u8, set_flags: bool) -> u8 {
-    let mut new_val = val >> 1;
-    if emu.regs.flags.contains(StatusRegister::CARRY) {
-        new_val |= 1 << 7;
-    }
+    let new_val = val << 1 | emu.regs.flags.carry();
 
     if set_flags {
         let carry = val & (1 << 0) > 0;
         let negative = new_val & (1 << 7) > 0;
 
-        emu.regs.flags.set(StatusRegister::CARRY, carry);
-        emu.regs.flags.set(StatusRegister::NEGATIVE, negative);
-        emu.regs.flags.set(StatusRegister::ZERO, new_val == 0);
+        emu.regs.flags.set_carry(carry.into());
+        emu.regs.flags.set_negative(negative.into());
+        emu.regs.flags.set_zero((new_val == 0).into());
     }
 
     new_val
@@ -64,9 +56,9 @@ pub fn asl(emu: &mut Emulator, op: Operand) -> usize {
         (new_val, val & (1 << 7) > 0, new_val & (1 << 7) > 0)
     };
 
-    emu.regs.flags.set(StatusRegister::CARRY, carry);
-    emu.regs.flags.set(StatusRegister::NEGATIVE, negative);
-    emu.regs.flags.set(StatusRegister::ZERO, new_val == 0);
+    emu.regs.flags.set_carry(carry.into());
+    emu.regs.flags.set_negative(negative.into());
+    emu.regs.flags.set_zero((new_val == 0).into());
 
     0
 }
@@ -90,9 +82,9 @@ pub fn lsr(emu: &mut Emulator, op: Operand) -> usize {
         (new_val, val & (1 << 0) > 0)
     };
 
-    emu.regs.flags.set(StatusRegister::CARRY, carry);
-    emu.regs.flags.set(StatusRegister::NEGATIVE, false);
-    emu.regs.flags.set(StatusRegister::ZERO, new_val == 0);
+    emu.regs.flags.set_carry(carry.into());
+    emu.regs.flags.set_negative(0);
+    emu.regs.flags.set_zero((new_val == 0).into());
 
     0
 }
@@ -143,15 +135,11 @@ pub fn and(emu: &mut Emulator, op: Operand) -> usize {
 pub fn bit(emu: &mut Emulator, op: Operand) -> usize {
     let val = emu.get_val_from_operand(op);
 
-    emu.regs
-        .flags
-        .set(StatusRegister::NEGATIVE, val & (1 << 7) != 0);
-    emu.regs
-        .flags
-        .set(StatusRegister::OVERFLOW, val & (1 << 6) != 0);
+    emu.regs.flags.set_negative((val & (1 << 7) != 0).into());
+    emu.regs.flags.set_overflow((val & (1 << 6) != 0).into());
 
     let result = val & emu.regs.a;
-    emu.regs.flags.set(StatusRegister::ZERO, result == 0);
+    emu.regs.flags.set_zero((result == 0).into());
 
     0
 }
@@ -185,9 +173,7 @@ pub fn slo(emu: &mut Emulator, op: Operand) -> usize {
     let val = emu.read(addr);
     let new_val = val << 1;
 
-    emu.regs
-        .flags
-        .set(StatusRegister::CARRY, val & (1 << 7) > 0);
+    emu.regs.flags.set_carry((val & (1 << 7) > 0).into());
 
     let res = emu.regs.a | new_val;
 
@@ -202,9 +188,7 @@ pub fn sre(emu: &mut Emulator, op: Operand) -> usize {
     let val = emu.read(addr);
     let new_val = val >> 1;
 
-    emu.regs
-        .flags
-        .set(StatusRegister::CARRY, val & (1 << 0) > 0);
+    emu.regs.flags.set_carry((val & (1 << 0) > 0).into());
 
     let res = emu.regs.a ^ new_val;
 

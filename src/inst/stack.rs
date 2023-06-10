@@ -13,7 +13,7 @@ pub fn pha(emu: &mut Emulator, op: Operand) -> usize {
 
 pub fn php(emu: &mut Emulator, op: Operand) -> usize {
     match op {
-        Operand::Implied => emu.push_on_stack(emu.regs.flags.bits()),
+        Operand::Implied => emu.push_on_stack(emu.regs.flags.clone().into_bytes()[0]),
         _ => unreachable!(),
     }
 
@@ -36,7 +36,7 @@ pub fn plp(emu: &mut Emulator, op: Operand) -> usize {
     match op {
         Operand::Implied => {
             let val = emu.pop_stack();
-            emu.regs.flags = StatusRegister::from_bits(val).unwrap();
+            emu.regs.flags = StatusRegister::from_bytes([val]);
         }
         _ => unreachable!(),
     }

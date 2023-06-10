@@ -5,7 +5,7 @@ use super::Operand;
 pub fn brk(emu: &mut Emulator, op: Operand) -> usize {
     match op {
         Operand::Implied => {
-            emu.push_on_stack(emu.regs.flags.bits());
+            emu.push_on_stack(emu.regs.flags.clone().into_bytes()[0]);
 
             let (ret_high, ret_low) = {
                 let ret = emu.regs.pc;
@@ -72,7 +72,7 @@ pub fn rti(emu: &mut Emulator, op: Operand) -> usize {
 
             let ret_addr = ret_high << 8 | ret_low;
 
-            emu.regs.flags = StatusRegister::from_bits(status).unwrap();
+            emu.regs.flags = StatusRegister::from_bytes([status]);
             emu.regs.pc = ret_addr;
         }
         _ => unreachable!(),

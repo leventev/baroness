@@ -1,4 +1,7 @@
-use modular_bitfield::{bitfield, specifiers::{B1, B4}};
+use modular_bitfield::{
+    bitfield,
+    specifiers::{B1, B4},
+};
 
 const NES_MAGIC: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
@@ -8,7 +11,7 @@ struct Flags6 {
     prg_ram: B1,
     trainer: B1,
     ignore_mirroring_control: B1,
-    ignore: B4
+    ignore: B4,
 }
 
 pub enum MirroringMode {
@@ -58,7 +61,7 @@ pub fn parse_nes_file(file: &[u8]) -> Result<NESFile, ()> {
             MirroringMode::Horizontal
         },
         has_prg_ram: flags_6.prg_ram() > 0,
-        has_trainer: flags_6.trainer() >0,
+        has_trainer: flags_6.trainer() > 0,
         mapper_number: flags_6.into_bytes()[0] >> 4 | flags_7 & 0b11110000,
     };
 

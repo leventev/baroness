@@ -32,8 +32,7 @@ pub const WINDOW_WIDTH: u32 = WINDOW_SCALE * ORIGINAL_WIDTH;
 pub const WINDOW_HEIGHT: u32 = WINDOW_SCALE * ORIGINAL_HEIGHT;
 
 #[bitfield]
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct StatusRegister {
     pub carry: B1,
     pub zero: B1,

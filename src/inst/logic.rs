@@ -16,7 +16,7 @@ fn rotate_left(emu: &mut Emulator, val: u8, set_flags: bool) -> u8 {
 }
 
 fn rotate_right(emu: &mut Emulator, val: u8, set_flags: bool) -> u8 {
-    let new_val = val << 1 | emu.regs.flags.carry();
+    let new_val = (val >> 1) | (emu.regs.flags.carry() << 7);
 
     if set_flags {
         let carry = val & (1 << 0) > 0;

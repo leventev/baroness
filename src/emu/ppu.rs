@@ -402,17 +402,14 @@ impl Emulator {
                         self.ppu.current_palette = attrib & 0b11;
                     }
 
-                    let color_idx = (self.ppu.msb_shift_reg >> 7) * 2 + (self.ppu.lsb_shift_reg >> 7);
+                    let color_idx =
+                        (self.ppu.msb_shift_reg >> 7) * 2 + (self.ppu.lsb_shift_reg >> 7);
                     self.ppu.msb_shift_reg <<= 1;
                     self.ppu.lsb_shift_reg <<= 1;
 
                     let palette_table_idx = self.ppu.current_palette * 4 + color_idx;
 
                     let idx = self.ppu.palette_table[palette_table_idx as usize] as usize;
-
-                    if color_idx != 0 {
-                        println!("palette: {} color_idx: {} palette_table_idx: {} idx: {}", self.ppu.current_palette, color_idx, palette_table_idx, idx);
-                    }
 
                     let (r, g, b) = (PALETTE[idx * 3], PALETTE[idx * 3 + 1], PALETTE[idx * 3 + 2]);
 
